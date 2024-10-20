@@ -8,18 +8,23 @@ Description: Generates a context file (`repo-context.txt`) for AI coding assista
 
 Usage:
 1. Ensure you have Python 3.7 or higher installed.
+
 2. (Optional) Set up a Python virtual environment:
      python3 -m venv venv
-     source venv/bin/activate       # On Unix or MacOS
-     venv\Scripts\activate.bat      # On Windows (Command Prompt)
-     venv\Scripts\Activate.ps1       # On Windows (PowerShell)
+     source venv/bin/activate               # On Unix or MacOS
+     venv\Scripts\activate.bat              # On Windows (Command Prompt)
+     venv\Scripts\Activate.ps1              # On Windows (PowerShell)
+
 3. Install the required Python packages:
      pip install -r requirements.txt
+
 4. Configure `config.yaml` as needed.
+
 5. Place `overview.txt`, `important_info.txt`, and `to-do_list.txt` in the script directory.
+
 6. Run the script:
-     ./generate_repo-context.py     # Unix-like systems
-     python generate_repo-context.py  # Windows
+     ./generate_repo-context.py             # Unix-like systems
+     python generate_repo-context.py        # Windows
      
 The script will create `repo-context.txt` with the specified structure.
 """
@@ -31,6 +36,7 @@ from pathlib import Path
 import mimetypes
 import logging
 from typing import List, Dict
+from datetime import datetime  # Added import for datetime
 
 # Configuration Constants
 CONFIG_FILE = "config.yaml"
@@ -115,7 +121,10 @@ def generate_directory_tree(start_path: Path, exclude_dirs: List[str]) -> List[s
         depth = len(rel_path.parts)
         indent = "    " * depth
         connector = "├── " if depth > 0 else "."
-        tree_lines.append(f"{indent}{connector}{current_path.name}/" if depth > 0 else f"{connector}")
+        if depth > 0:
+            tree_lines.append(f"{indent}{connector}{current_path.name}/")
+        else:
+            tree_lines.append(f"{connector}")
 
         # Add files in the current directory
         for filename in sorted(filenames):
@@ -136,9 +145,12 @@ def write_directory_tree(tree_lines: List[str], output_file: Path):
         tree_lines (list): List of strings representing the directory tree.
         output_file (Path): Path to the output file where the tree will be written.
     """
-    output_file.write_text("## Directory Tree with Exclusions\n\n```\n")
-    output_file.write("\n".join(tree_lines))
-    output_file.write("\n```\n\n")
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write("## Directory Tree with Exclusions\n\n")
+        f.write("```\n")
+        for line in tree_lines:
+            f.write(line + "\n")
+        f.write("```\n\n")
     logging.info("Directory tree written to the context file.")
 
 def write_file_content(file_path: Path, output_file: Path):
@@ -151,22 +163,28 @@ def write_file_content(file_path: Path, output_file: Path):
     """
     ext = file_path.suffix
     language = LANGUAGE_MAP.get(ext, '')
-    relative_display_path = file_path.relative_to(file_path.parents[1])
-
-    output_file.write(f"## {relative_display_path}\n")
-    if language:
-        output_file.write(f"```{language}\n")
-    else:
-        output_file.write("```\n")
     try:
-        if ext in BINARY_EXTENSIONS:
-            output_file.write(f"*Binary file ({ext}) cannot be displayed.*\n")
+        relative_display_path = file_path.relative_to(file_path.parents[1])
+    except ValueError:
+        # If relative_to fails, fallback to absolute path
+        relative_display_path = file_path
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write(f"## {relative_display_path}\n")
+        if language:
+            f.write(f"```{language}\n")
         else:
-            content = file_path.read_text(encoding='utf-8', errors='ignore')
-            output_file.write(content)
-    except Exception as e:
-        output_file.write(f"*Error reading file: {e}*\n")
-    output_file.write("\n```\n\n")
+            f.write("```\n")
+        try:
+            if ext in BINARY_EXTENSIONS:
+                # Skip binary files
+                f.write(f"*Binary file ({ext}) cannot be displayed.*\n")
+            else:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as file_content:
+                    content = file_content.read()
+                    f.write(content)
+        except Exception as e:
+            f.write(f"*Error reading file: {e}*\n")
+        f.write("\n```\n\n")
     logging.info(f"Included content from {file_path}.")
 
 def write_static_file(file_path: Path, output_file: Path, section_title: str):
@@ -181,14 +199,16 @@ def write_static_file(file_path: Path, output_file: Path, section_title: str):
     if not file_path.exists():
         logging.warning(f"Static file {file_path} not found, skipping...")
         return
-    output_file.write(f"## {section_title}\n\n")
-    try:
-        content = file_path.read_text(encoding='utf-8', errors='ignore')
-        output_file.write(content + "\n\n")
-        logging.info(f"Included static section: {section_title}.")
-    except Exception as e:
-        output_file.write(f"*Error reading {file_path.name}: {e}*\n\n")
-        logging.error(f"Error reading {file_path}: {e}")
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write(f"## {section_title}\n\n")
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as sf:
+                content = sf.read()
+                f.write(content + "\n\n")
+        except Exception as e:
+            f.write(f"*Error reading {file_path.name}: {e}*\n\n")
+            logging.error(f"Error reading {file_path}: {e}")
+    logging.info(f"Included static section: {section_title}.")
 
 def write_custom_sections(custom_sections: List[Dict], script_dir: Path, output_file: Path):
     """
@@ -232,7 +252,7 @@ def main():
     # Write a header to the output file
     with output_file.open('w', encoding='utf-8') as f:
         f.write(f"# Repository Context\n\n")
-        f.write(f"Generated on: {Path.now().strftime('%Y-%m-%d')}\n\n")
+        f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d')}\n\n")  # Updated line
 
     # Write static sections
     for static in STATIC_FILES:
@@ -244,13 +264,15 @@ def main():
     write_directory_tree(tree_lines, output_file)
 
     # Write important files
-    output_file.write("## Important Files\n\n")
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write("## Important Files\n\n")
     for relative_file in important_files:
         file_path = start_path / relative_file
         if file_path.exists():
             write_file_content(file_path, output_file)
         else:
-            output_file.write(f"*File `{relative_file}` not found, skipping...*\n\n")
+            with output_file.open('a', encoding='utf-8') as f:
+                f.write(f"*File `{relative_file}` not found, skipping...*\n\n")
             logging.warning(f"Important file {relative_file} not found, skipping...")
 
     # Write custom sections if any
@@ -258,9 +280,6 @@ def main():
         write_custom_sections(custom_sections, script_dir, output_file)
 
     # Write to-do list
-    for static in STATIC_FILES:
-        if static["section_title"] == "To-Do List":
-            continue  # Already written
     todo_path = script_dir / "to-do_list.txt"
     write_static_file(todo_path, output_file, "To-Do List")
 
