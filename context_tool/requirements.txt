@@ -1,0 +1,4 @@
+# requirements.txt
+
+# PyYAML is required for parsing YAML configuration files
+PyYAML>=6.0
