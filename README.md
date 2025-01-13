@@ -98,13 +98,11 @@ cd src
 
 Update pip first:
 
-````bash
-python -m pip install --upgrade pip
-```
-
 ```bash
+python -m pip install --upgrade pip
+
 pip install -r requirements.txt
-````
+```
 
 Required packages:
 
