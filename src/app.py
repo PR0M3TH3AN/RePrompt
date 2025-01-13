@@ -64,7 +64,7 @@ if "selected_repo_path" not in st.session_state:
     st.session_state["selected_repo_path"] = None
 
 # Streamlit App
-st.title("Repository Context Generator")
+st.title("RePrompt: A Context Generator")
 
 # Folder Selection
 st.sidebar.header("Select a Folder")

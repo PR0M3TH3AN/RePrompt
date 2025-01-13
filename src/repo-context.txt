@@ -1,0 +1,2191 @@
+# Repository Context
+
+Generated on: 2025-01-13
+
+## Overview
+
+# Project Overview
+
+This project is designed to generate a comprehensive context file for AI coding assistants. It aggregates essential information from your repository, enabling more informed and efficient interactions with AI tools.
+
+
+## Important Information
+
+
+
+## To-Do List
+
+
+
+## Directory Tree with Exclusions
+
+```
+.
+    ├── .gitattributes
+    ├── .gitignore
+    ├── README.md
+    ├── context_tool/
+        ├── config.yaml
+        ├── generate_repo-context.py
+        ├── important_info.txt
+        ├── overview.txt
+        ├── prompt_templates.txt
+        ├── repo-context.txt
+        ├── requirements.txt
+        ├── to-do_list.txt
+    ├── src/
+        ├── README.md
+        ├── app.py
+        ├── config.yaml
+        ├── generate_repo_context.py
+        ├── index.html
+        ├── repo-context.txt
+        ├── requirements.txt
+        ├── saved_config.yaml
+        ├── global_files/
+            ├── format_response.md
+        ├── static_files/
+            ├── important_info.txt
+            ├── overview.txt
+            ├── to-do_list.txt
+```
+
+## Important Files
+
+## src\app.py
+```python
+import streamlit as st
+from pathlib import Path
+import os
+import yaml
+from tkinter import Tk
+from tkinter.filedialog import askdirectory
+import subprocess
+import sys 
+import pyperclip
+
+# Initialize session state variables
+if 'copied' not in st.session_state:
+    st.session_state.copied = False
+
+# Configuration
+CONFIG_FILE = "config.yaml"
+OUTPUT_FILE = "repo-context.txt"
+GLOBAL_FILES_DIR = Path(__file__).parent / "global_files"
+SAVED_CONFIG_FILE = Path(__file__).parent / "saved_config.yaml"
+SCRIPT_DIR = Path(__file__).parent
+
+# Default exclusions
+DEFAULT_EXCLUDED_DIRS = ["node_modules", "venv", "__pycache__", ".git", "dist", "build", "logs", ".idea", ".vscode"]
+DEFAULT_EXCLUDED_FILES = ["repo-context.txt"]
+
+# Ensure necessary directories exist
+GLOBAL_FILES_DIR.mkdir(exist_ok=True)
+
+# Load saved configuration
+def load_saved_config():
+    if SAVED_CONFIG_FILE.exists():
+        try:
+            with open(SAVED_CONFIG_FILE, "r") as f:
+                return yaml.safe_load(f)
+        except yaml.YAMLError:
+            return {}
+    return {}
+
+# Save configuration
+def save_config(config):
+    with open(SAVED_CONFIG_FILE, "w") as f:
+        yaml.dump(config, f)
+
+# Load application configuration
+def load_config():
+    config_path = SCRIPT_DIR / CONFIG_FILE
+    if not config_path.exists():
+        st.error(f"Configuration file {CONFIG_FILE} not found.")
+        st.stop()
+    try:
+        with open(config_path, "r") as f:
+            return yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        st.error(f"Error parsing configuration file: {e}")
+        st.stop()
+
+app_config = load_config()
+saved_config = load_saved_config()
+
+exclude_dirs = app_config.get("exclude_dirs", DEFAULT_EXCLUDED_DIRS)
+
+# Initialize session state for selected_repo_path if not present
+if "selected_repo_path" not in st.session_state:
+    st.session_state["selected_repo_path"] = None
+
+# Streamlit App
+st.title("RePrompt: A Context Generator")
+
+# Folder Selection
+st.sidebar.header("Select a Folder")
+
+def select_folder():
+    try:
+        root = Tk()
+        root.withdraw()  # Hide the main window
+        root.wm_attributes('-topmost', True)  # Keep on top
+        folder_path = askdirectory(parent=root)  # Specify parent window
+        if folder_path:
+            st.session_state["selected_repo_path"] = folder_path
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Error selecting folder: {str(e)}")
+        return False
+    finally:
+        try:
+            root.destroy()  # Ensure window is destroyed
+        except:
+            pass  # Ignore any errors during cleanup
+
+if st.sidebar.button("Choose Folder"):
+    if select_folder():
+        st.sidebar.success(f"Selected folder: {st.session_state['selected_repo_path']}")
+    else:
+        st.sidebar.error("No folder selected.")
+
+# Load previously selected folder
+selected_repo_path = st.session_state.get("selected_repo_path", None)
+
+if selected_repo_path:
+    st.header(f"Selected Repository: {selected_repo_path}")
+    repo_path = Path(selected_repo_path)
+
+    st.subheader("File Filtering")
+    # Retrieve directories and files in the repository
+    all_directories = []
+    all_files = []
+    for root_dir, dirs, files in os.walk(repo_path):
+        rel_root = Path(root_dir).relative_to(repo_path)
+        # Exclude default directories
+        dirs[:] = [d for d in dirs if d not in DEFAULT_EXCLUDED_DIRS]
+        for d in dirs:
+            all_directories.append(str(rel_root / d) + "/")
+        for f in files:
+            all_files.append(str(rel_root / f))
+
+    # Directory selection for Directory Tree
+    selected_directories = st.multiselect(
+        "Include in Directory Tree",
+        options=all_directories,
+        default=saved_config.get("selected_directories", [])
+    )
+
+    # Automatically include files within selected directories unless explicitly excluded
+    included_files = [
+        f for f in all_files if any(str(Path(f).parent) in d for d in selected_directories)
+    ]
+
+    # File exclusions
+    excluded_files = st.multiselect(
+        "Exclude Specific Files",
+        options=[f for f in included_files if f not in DEFAULT_EXCLUDED_FILES],
+        default=[
+            f for f in saved_config.get("excluded_files", [])
+            if f in included_files and f not in DEFAULT_EXCLUDED_FILES
+        ],
+    )
+
+    st.write("### Final Included Files")
+    final_included_files = [f for f in included_files if f not in excluded_files]
+    st.write(final_included_files)
+
+    st.subheader("Generate Context File")
+    if st.button("Generate Context File"):
+        try:
+            # Update config.yaml based on user selections
+            updated_config = {
+                "source_directory": str(repo_path),
+                "exclude_dirs": DEFAULT_EXCLUDED_DIRS,
+                "important_files": final_included_files,
+                "custom_sections": app_config.get("custom_sections", []),
+            }
+
+            # Write updated config.yaml
+            with open(SCRIPT_DIR / CONFIG_FILE, "w") as f:
+                yaml.dump(updated_config, f)
+
+            # Run the script as a subprocess
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT_DIR / "generate_repo_context.py")],
+                cwd=SCRIPT_DIR,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            st.success("Context file generated successfully.")
+            st.write(f"Script output:\n{result.stdout}")
+
+            # Check if the file was created
+            generated_file = SCRIPT_DIR / OUTPUT_FILE
+            if generated_file.exists():
+                with open(generated_file, "r", encoding="utf-8") as f:
+                    context_content = f.read()
+
+                # Replace the current copy button section with this:
+                if context_content.strip():  # Ensure content is not empty
+                    # Add Download Button with unique key
+                    st.download_button(
+                        label="Download repo-context.txt",
+                        data=context_content,
+                        file_name="repo-context.txt",
+                        mime="text/plain",
+                        key="download_button_1"
+                    )
+
+                    st.info("To copy: Click in the text area, press Ctrl+A (Cmd+A on Mac) to select all, then Ctrl+C (Cmd+C on Mac) to copy.")
+
+                    # Create a text area with the content
+                    text_area = st.text_area(
+                        "Generated Context File",
+                        value=context_content,
+                        height=400,
+                        key="context_content"
+                    )
+                else:
+                    st.error("Generated content is empty. Please review your repository and configurations.")
+            else:
+                st.error("Context file not found after script execution.")
+        except subprocess.CalledProcessError as e:
+            st.error("Error generating context file:")
+            if e.stdout:
+                st.text(f"Standard Output:\n{e.stdout}")
+            if e.stderr:
+                st.text(f"Standard Error:\n{e.stderr}")
+
+    # Save configuration for future use
+    if st.button("Save Configuration"):
+        save_config({
+            "selected_directories": selected_directories,
+            "excluded_files": excluded_files,
+        })
+        st.success("Configuration saved successfully.")
+else:
+    st.write("Please select a folder to begin.")
+```
+
+## src\config.yaml
+```
+custom_sections:
+- file: changelog.txt
+  section_title: Changelog
+- file: LICENSE.txt
+  section_title: License
+exclude_dirs:
+- node_modules
+- venv
+- __pycache__
+- .git
+- dist
+- build
+- logs
+- .idea
+- .vscode
+important_files:
+- src\app.py
+- src\config.yaml
+- src\generate_repo_context.py
+- src\index.html
+- src\README.md
+- src\repo-context.txt
+- src\requirements.txt
+- src\saved_config.yaml
+- src\global_files\format_response.md
+- src\static_files\important_info.txt
+- src\static_files\overview.txt
+- src\static_files\to-do_list.txt
+source_directory: C:\Users\user\Documents\GitHub\Context-Tool
+
+```
+
+## src\generate_repo_context.py
+```python
+#!/usr/bin/env python3
+
+"""
+Script Name: generate_repo_context.py
+Description: Generates a context file (`repo-context.txt`) for AI coding assistants.
+             Includes an overview, important information, a directory tree with exclusions,
+             content of important files with syntax highlighting, and a to-do list.
+
+Usage:
+1. Ensure you have Python 3.7 or higher installed.
+
+2. (Optional) Set up a Python virtual environment:
+     python -m venv venv
+     source venv/bin/activate               # On Unix or MacOS
+     venv\Scripts\activate.bat              # On Windows (Command Prompt)
+     venv\Scripts\Activate.ps1              # On Windows (PowerShell)
+
+3. Install the required Python packages:
+     pip install -r requirements.txt
+
+4. Configure `config.yaml` as needed.
+
+5. Place `overview.txt`, `important_info.txt`, and `to-do_list.txt` in the `static_files` directory.
+
+6. Run the script:
+     ./generate_repo_context.py             # Unix-like systems
+     python generate_repo_context.py        # Windows
+     
+The script will create `repo-context.txt` with the specified structure.
+"""
+
+import os
+import sys
+import yaml
+from pathlib import Path
+import logging
+from typing import List, Dict
+from datetime import datetime
+
+# Configuration Constants
+CONFIG_FILE = "config.yaml"
+OUTPUT_FILE = "repo-context.txt"
+
+# Static Text Files and Their Corresponding Section Titles
+STATIC_FILES = [
+    {"file": "overview.txt", "section_title": "Overview"},
+    {"file": "important_info.txt", "section_title": "Important Information"},
+    {"file": "to-do_list.txt", "section_title": "To-Do List"}
+]
+
+# Mapping of File Extensions to Programming Languages for Syntax Highlighting
+LANGUAGE_MAP = {
+    '.py': 'python',
+    '.json': 'json',
+    '.env': 'bash',
+    '.js': 'javascript',
+    '.html': 'html',
+    '.css': 'css',
+    '.csv': 'csv',
+    '.md': 'markdown',
+    '.txt': '',  # Plain text
+    '.xml': 'xml',
+    # Add more mappings as needed
+}
+
+# Extensions of Binary Files to Skip
+BINARY_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.db', '.exe', '.bin']
+
+def setup_logging():
+    """Configures the logging format and level."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(levelname)s] %(message)s'
+    )
+
+def load_config(config_path: Path) -> Dict:
+    """
+    Loads configuration from a YAML file.
+
+    Args:
+        config_path (Path): Path to the YAML configuration file.
+
+    Returns:
+        dict: Configuration dictionary containing 'exclude_dirs', 'important_files', and 'custom_sections'.
+    """
+    if not config_path.exists():
+        logging.error(f"Configuration file {config_path} not found.")
+        sys.exit(1)
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        logging.info(f"Loaded configuration from {config_path}.")
+        return config
+    except yaml.YAMLError as e:
+        logging.error(f"Error parsing configuration file: {e}")
+        sys.exit(1)
+
+def generate_directory_tree(start_path: Path, exclude_dirs: List[str]) -> List[str]:
+    """
+    Generates a directory tree as a list of strings, excluding specified directories.
+
+    Args:
+        start_path (Path): The root directory to start generating the tree from.
+        exclude_dirs (list): List of directory patterns to exclude.
+
+    Returns:
+        list: List of strings representing the directory tree.
+    """
+    tree_lines = []
+    root = start_path.resolve()
+    for dirpath, dirnames, filenames in os.walk(start_path):
+        current_path = Path(dirpath)
+        rel_path = current_path.relative_to(root)
+
+        # Skip excluded directories
+        if any(current_path.match(excl) or excl in rel_path.parts for excl in exclude_dirs):
+            dirnames[:] = []  # Don't traverse further into subdirectories
+            continue
+
+        # Determine the indentation level
+        depth = len(rel_path.parts)
+        indent = "    " * depth
+        connector = "├── " if depth > 0 else "."
+        if depth > 0:
+            tree_lines.append(f"{indent}{connector}{current_path.name}/")
+        else:
+            tree_lines.append(f"{connector}")
+
+        # Add files in the current directory
+        for filename in sorted(filenames):
+            file_rel_path = rel_path / filename
+            if any(file_rel_path.match(excl) or excl in file_rel_path.parts for excl in exclude_dirs):
+                continue
+            file_indent = "    " * (depth + 1)
+            tree_lines.append(f"{file_indent}├── {filename}")
+
+    logging.info("Directory tree generated.")
+    return tree_lines
+
+def write_directory_tree(tree_lines: List[str], output_file: Path):
+    """
+    Writes the directory tree to the output file within markdown code blocks.
+
+    Args:
+        tree_lines (list): List of strings representing the directory tree.
+        output_file (Path): Path to the output file where the tree will be written.
+    """
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write("## Directory Tree with Exclusions\n\n")
+        f.write("```\n")
+        for line in tree_lines:
+            f.write(line + "\n")
+        f.write("```\n\n")
+    logging.info("Directory tree written to the context file.")
+
+def write_file_content(file_path: Path, output_file: Path):
+    """
+    Writes the content of a file to the output file within markdown code blocks with syntax highlighting.
+
+    Args:
+        file_path (Path): Path to the file whose content is to be written.
+        output_file (Path): Path to the output file where the content will be written.
+    """
+    ext = file_path.suffix
+    language = LANGUAGE_MAP.get(ext, '')
+    try:
+        relative_display_path = file_path.relative_to(file_path.parents[1])
+    except ValueError:
+        # If relative_to fails, fallback to absolute path
+        relative_display_path = file_path
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write(f"## {relative_display_path}\n")
+        if language:
+            f.write(f"```{language}\n")
+        else:
+            f.write("```\n")
+        try:
+            if ext in BINARY_EXTENSIONS:
+                # Skip binary files
+                f.write(f"*Binary file ({ext}) cannot be displayed.*\n")
+            else:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as file_content:
+                    content = file_content.read()
+                    f.write(content)
+        except Exception as e:
+            f.write(f"*Error reading file: {e}*\n")
+        f.write("\n```\n\n")
+    logging.info(f"Included content from {file_path}.")
+
+def write_static_file(file_path: Path, output_file: Path, section_title: str):
+    """
+    Writes the content of a static text file to the output file with a section header.
+
+    Args:
+        file_path (Path): Path to the static text file.
+        output_file (Path): Path to the output file where the content will be written.
+        section_title (str): Title of the section to be added before the content.
+    """
+    if not file_path.exists():
+        logging.warning(f"Static file {file_path} not found, skipping...")
+        return
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write(f"## {section_title}\n\n")
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as sf:
+                content = sf.read()
+                f.write(content + "\n\n")
+        except Exception as e:
+            f.write(f"*Error reading {file_path.name}: {e}*\n\n")
+            logging.error(f"Error reading {file_path}: {e}")
+    logging.info(f"Included static section: {section_title}.")
+
+def write_custom_sections(custom_sections: List[Dict], script_dir: Path, output_file: Path):
+    """
+    Writes custom sections to the output file based on configuration.
+
+    Args:
+        custom_sections (list): List of dictionaries with 'file' and 'section_title'.
+        script_dir (Path): Directory where the script is located.
+        output_file (Path): Path to the output file.
+    """
+    for section in custom_sections:
+        file_name = section.get('file')
+        section_title = section.get('section_title', 'Custom Section')
+        file_path = script_dir / "static_files" / file_name
+        write_static_file(file_path, output_file, section_title)
+
+def append_xml_section(output_file: Path):
+    """
+    Appends the XML section to the output file within markdown code blocks.
+
+    Args:
+        output_file (Path): Path to the output file where the XML section will be appended.
+    """
+    xml_content = """
+## XML Section
+
+```xml
+<code_changes>
+  <changed_files>
+    <file>
+      <file_operation>CREATE</file_operation>
+      <file_path>app/new_file.py</file_path>
+      <file_code><![CDATA[
+# New Python file
+def new_function():
+    pass
+]]></file_code>
+    </file>
+    <!-- Add more file changes here -->
+  </changed_files>
+</code_changes>
+```
+
+**Other rules:**
+- DO NOT remove `<ai_context>` sections. These are to provide you additional context about each file.
+- If you create a file, add an `<ai_context>` comment section at the top of the file.
+- If you update a file make sure its `<ai_context>` stays up-to-date.
+- DO NOT add comments related to your edits.
+- DO NOT remove my existing comments.
+"""
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write(xml_content + "\n")
+    logging.info("XML section appended to the context file.")
+
+def main():
+    """Main function that orchestrates the generation of the repository context file."""
+    setup_logging()
+
+    # Determine the script's directory
+    script_dir = Path(__file__).parent.resolve()
+
+    # Load configuration
+    config_path = script_dir / CONFIG_FILE
+    config = load_config(config_path)
+    exclude_dirs = config.get("exclude_dirs", [])
+    important_files = config.get("important_files", [])
+    custom_sections = config.get("custom_sections", [])
+
+    # Define the starting path (default to 'src' directory or as specified)
+    source_dir = config.get("source_directory", "src")
+    start_path = script_dir.parent / source_dir
+    if not start_path.exists():
+        logging.error(f"Source directory {start_path} does not exist.")
+        sys.exit(1)
+
+    output_file = script_dir / OUTPUT_FILE
+    output_file.unlink(missing_ok=True)  # Remove if exists
+
+    # Write a header to the output file
+    with output_file.open('w', encoding='utf-8') as f:
+        f.write(f"# Repository Context\n\n")
+        f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d')}\n\n")
+
+    # Write static sections
+    for static in STATIC_FILES:
+        static_path = script_dir / "static_files" / static["file"]
+        write_static_file(static_path, output_file, static["section_title"])
+
+    # Generate and write the directory tree
+    tree_lines = generate_directory_tree(start_path, exclude_dirs)
+    write_directory_tree(tree_lines, output_file)
+
+    # Write important files
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write("## Important Files\n\n")
+    for relative_file in important_files:
+        file_path = start_path / relative_file
+        if file_path.exists():
+            write_file_content(file_path, output_file)
+        else:
+            with output_file.open('a', encoding='utf-8') as f:
+                f.write(f"*File `{relative_file}` not found, skipping...*\n\n")
+            logging.warning(f"Important file {relative_file} not found, skipping...")
+
+    # Write custom sections if any
+    if custom_sections:
+        write_custom_sections(custom_sections, script_dir, output_file)
+
+    # Write to-do list
+    todo_path = script_dir / "static_files" / "to-do_list.txt"
+    write_static_file(todo_path, output_file, "To-Do List")
+
+    # Append XML section
+    append_xml_section(output_file)
+
+    logging.info(f"Context file created: {output_file}")
+
+if __name__ == "__main__":
+    main()
+
+```
+
+## src\index.html
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Generate context files for repositories with ease. Streamline AI coding assistant interactions."
+    />
+    <title>Repository Context Generator</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 0;
+        background: #f4f4f9;
+        color: #333;
+      }
+      header {
+        background: #6200ea;
+        color: white;
+        padding: 20px 0;
+        text-align: center;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 2.5rem;
+      }
+      header p {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+      .container {
+        max-width: 900px;
+        margin: 20px auto;
+        padding: 0 20px;
+      }
+      .cta {
+        background: #fff;
+        padding: 20px;
+        margin: 20px 0;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .cta h2 {
+        margin: 0 0 10px;
+        font-size: 1.8rem;
+      }
+      .cta p {
+        margin: 0 0 20px;
+      }
+      .cta a {
+        display: inline-block;
+        text-decoration: none;
+        background: #6200ea;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 4px;
+        font-size: 1.2rem;
+      }
+      .cta a:hover {
+        background: #4500b3;
+      }
+      footer {
+        background: #333;
+        color: white;
+        text-align: center;
+        padding: 10px 0;
+        margin-top: 20px;
+      }
+      footer p {
+        margin: 0;
+        font-size: 0.9rem;
+      }
+      footer a {
+        color: #6200ea;
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Repository Context Generator</h1>
+      <p>Your tool for creating comprehensive repository context files</p>
+    </header>
+
+    <div class="container">
+      <section class="cta">
+        <h2>Get Started</h2>
+        <p>
+          Generate a context file for your repository, including key details,
+          directory structure, and more.
+        </p>
+        <a href="http://localhost:8501" target="_blank">Open the Application</a>
+      </section>
+
+      <section>
+        <h2>How It Works</h2>
+        <p>
+          This tool simplifies interactions with AI coding assistants by
+          generating a structured context file. You can customize directory
+          exclusions, include important files, and add global documentation.
+        </p>
+        <ul>
+          <li>Clone repositories easily via the app.</li>
+          <li>Customize context settings to suit your project.</li>
+          <li>Download the generated context file directly from the app.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Features</h2>
+        <ul>
+          <li>Supports multiple repositories.</li>
+          <li>Includes static documentation sections.</li>
+          <li>Customizable exclusions and global file inclusions.</li>
+          <li>Syntax-highlighted file contents.</li>
+        </ul>
+      </section>
+    </div>
+
+    <footer>
+      <p>
+        &copy; 2025 Repository Context Generator. Built with
+        <a href="https://streamlit.io" target="_blank">Streamlit</a>.
+      </p>
+    </footer>
+  </body>
+</html>
+
+```
+
+## src\README.md
+```markdown
+Certainly! Below is the updated `README.md` for your **Repository Context Generator Web App**, which includes detailed run commands and clarifies the setup process. This update ensures that users can easily follow the steps to install, activate the virtual environment, install dependencies, and run the Streamlit application.
+
+---
+
+# Repository Context Generator Web App
+
+The **Repository Context Generator** is a Streamlit-based web application designed to create a comprehensive context file (`repo-context.txt`) for AI coding assistants like ChatGPT. This context file aggregates essential information from your repository, including an overview, key details, a directory tree with exclusions, contents of important files with syntax highlighting, and a to-do list. Additionally, it supports the inclusion of global files that are incorporated into every generated context, regardless of the selected repository.
+
+## **Features**
+
+- **Repository Selection**: Choose from existing repositories or add new ones by providing their Git URLs.
+- **File Filtering**: Select which files to include or exclude from the prompt and directory tree.
+- **Global Files Management**: Add files that will be included in every generated context.
+- **Context File Generation**: Generate and download a tailored `repo-context.txt` file.
+- **XML Section Integration**: Automatically append an XML section adhering to specified formatting rules.
+
+## **Prerequisites**
+
+- **Python 3.7 or higher**: Ensure Python is installed on your system. Download it from [python.org](https://www.python.org/downloads/).
+- **Git**: To clone repositories. Download from [git-scm.com](https://git-scm.com/downloads).
+
+## **Directory Structure**
+
+```
+repository-context-generator/
+├── app.py
+├── generate_repo_context.py
+├── config.yaml
+├── requirements.txt
+├── global_files/
+│   └── global.xml
+├── static_files/
+│   ├── overview.txt
+│   ├── important_info.txt
+│   └── to-do_list.txt
+└── README.md
+```
+
+## **Setup Guide**
+
+### **1. Clone the Repository**
+
+Clone this repository to your local machine using Git:
+
+```bash
+git clone <repository-url>
+cd repository-context-generator
+```
+
+_Replace `<repository-url>` with the actual URL of your repository._
+
+### **2. Set Up Python Virtual Environment (Optional but Recommended)**
+
+Using a virtual environment isolates your project's dependencies, preventing conflicts with other projects.
+
+#### **a. Create a Virtual Environment**
+
+```bash
+python -m venv venv
+```
+
+#### **b. Activate the Virtual Environment**
+
+- **On Windows (Command Prompt):**
+
+  ```cmd
+  venv\Scripts\activate.bat
+  ```
+
+- **On Windows (PowerShell):**
+
+  ```powershell
+  .\venv\Scripts\Activate.ps1
+  ```
+
+  **Note:** If you encounter an execution policy error in PowerShell, you may need to adjust the execution policy:
+
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+
+  Then, try activating the virtual environment again.
+
+- **On macOS and Linux:**
+
+  ```bash
+  source venv/bin/activate
+  ```
+
+**Successful Activation:**
+
+Once activated, your terminal prompt should change to indicate that you're now working within the virtual environment, e.g., `(venv) $`.
+
+### **3. Install Required Packages**
+
+With the virtual environment activated, install the necessary Python packages using `pip`:
+
+```bash
+pip install -r requirements.txt
+```
+
+### **4. Configure the Application**
+
+Customize the `config.yaml` file to control which directories and files are included or excluded in the generated context.
+
+1. **Locate `config.yaml`**: It's in the root directory of the cloned repository.
+
+2. **Edit `config.yaml`**:
+   - **Exclude Directories**: Modify the `exclude_dirs` section to exclude any directories you don't want in the context.
+   - **Important Files**: List the key files under the `important_files` section that should be included with their content.
+   - **Custom Sections**: Define any additional sections you want to include.
+
+_Refer to the [Customization](#customization) section for detailed instructions._
+
+### **5. Add Static and Global Files**
+
+Ensure that the following files are present:
+
+- **Static Files**: Place `overview.txt`, `important_info.txt`, and `to-do_list.txt` inside the `static_files/` directory.
+- **Global Files**: Place any global files (e.g., `global.xml`) inside the `global_files/` directory.
+
+### **6. Running the Application**
+
+Launch the Streamlit web application:
+
+```bash
+streamlit run app.py
+```
+
+This command will open the application in your default web browser. If it doesn't open automatically, navigate to [http://localhost:8501](http://localhost:8501) in your browser.
+
+**Additional Run Commands:**
+
+- **Deactivate the Virtual Environment (When Done):**
+
+  ```bash
+  deactivate
+  ```
+
+- **Reactivating the Virtual Environment:**
+
+  Navigate back to the project directory and activate the virtual environment as described in **Step 2b**.
+
+## **Customization**
+
+### **Modifying `config.yaml`**
+
+The `config.yaml` file allows you to tailor the context generation process to your project's needs.
+
+```yaml
+# Configuration for Repository Context Generator
+
+# Primary source directory containing the main codebase.
+# Update this if your main code is not in 'src/'.
+source_directory: src
+
+# List of directories to exclude from the directory tree and file inclusions.
+exclude_dirs:
+  - node_modules # Node.js dependencies
+  - venv # Python virtual environment
+  - __pycache__ # Python bytecode cache
+  - build # Build output directories
+  - dist # Distribution packages
+  - .git # Git repository metadata
+  - .github # GitHub workflows and configurations
+  - .vscode # Visual Studio Code settings
+  - logs # Log files
+  - tmp # Temporary files and directories
+
+# List of important files to include in the context.
+# Paths should be relative to the 'source_directory' specified above.
+important_files:
+  - main.py # Entry point of the application
+  - app.py # Application configuration
+  - config/settings.py # Configuration settings
+  - utils/helpers.py # Utility helper functions
+  - models/user.py # User model definitions
+  - controllers/auth_controller.py # Authentication controller
+  - services/email_service.py # Email service integration
+  - routes/api_routes.py # API route definitions
+  - database/db_connection.py # Database connection setup
+  - tests/test_main.py # Main application tests
+
+# Custom sections to include additional information.
+custom_sections:
+  - file: changelog.txt
+    section_title: "Changelog"
+  - file: LICENSE.txt
+    section_title: "License"
+```
+
+**Instructions for Customization:**
+
+1. **`source_directory`**:
+
+   - Set this to the primary directory containing your source code.
+   - Example: For a project with main code in `app/`, set `source_directory: app`.
+
+2. **`exclude_dirs`**:
+
+   - Review the list and remove any directories that are essential for your project context.
+   - Add any additional directories you want to exclude by appending them to the list.
+   - Example: If your project uses a `docs/` directory for documentation, you might choose to exclude it:
+     ```yaml
+     - docs
+     ```
+
+3. **`important_files`**:
+
+   - Identify the key files in your project that define its core functionality.
+   - Ensure the paths are relative to your `source_directory`.
+   - Add or remove files as necessary to reflect your project's structure.
+   - Example: For a JavaScript project, you might include:
+     ```yaml
+     - index.js
+     - src/app.js
+     - src/routes/index.js
+     - src/controllers/userController.js
+     ```
+
+4. **`custom_sections`**:
+   - Define additional sections by specifying the file and its corresponding section title.
+   - Ensure the specified files exist in the `static_files/` directory or provide their paths accordingly.
+
+## **Additional Notes**
+
+- **Global Files**: Files placed in the `global_files/` directory are included in every generated context, regardless of the selected repository. For example, `global.xml` can be used to enforce specific formatting rules across all contexts.
+
+- **Syntax Highlighting**: The script supports syntax highlighting for common file types like `.py`, `.js`, `.json`, etc. To add more file types, update the `LANGUAGE_MAP` in `generate_repo_context.py`.
+
+- **Source Directory**: By default, the script assumes your main source code is in the `src/` directory. If your project uses a different structure, update the `source_directory` in `config.yaml`.
+
+- **Error Handling**: The application includes basic error handling to notify users of missing files or configuration issues. Ensure all necessary files are present to avoid errors.
+
+## **Contributing**
+
+Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+
+## **License**
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## **Conclusion**
+
+By following the above setup and utilizing the provided scripts, you can efficiently generate comprehensive context files for your repositories directly from your browser. The integration of global files ensures consistency across all generated contexts, while the interactive interface simplifies repository management and file filtering.
+
+Feel free to customize and extend the application to better fit your specific requirements. Contributions and feedback are highly appreciated!
+
+---
+
+```
+
+## src\repo-context.txt
+```
+# Repository Context
+
+Generated on: 2025-01-13
+
+## Overview
+
+# Project Overview
+
+This project is designed to generate a comprehensive context file for AI coding assistants. It aggregates essential information from your repository, enabling more informed and efficient interactions with AI tools.
+
+
+## Important Information
+
+
+
+## To-Do List
+
+
+
+## Directory Tree with Exclusions
+
+```
+.
+    ├── .gitattributes
+    ├── .gitignore
+    ├── README.md
+    ├── context_tool/
+        ├── config.yaml
+        ├── generate_repo-context.py
+        ├── important_info.txt
+        ├── overview.txt
+        ├── prompt_templates.txt
+        ├── repo-context.txt
+        ├── requirements.txt
+        ├── to-do_list.txt
+    ├── src/
+        ├── README.md
+        ├── app.py
+        ├── config.yaml
+        ├── generate_repo_context.py
+        ├── index.html
+        ├── repo-context.txt
+        ├── requirements.txt
+        ├── saved_config.yaml
+        ├── global_files/
+            ├── format_response.md
+        ├── static_files/
+            ├── important_info.txt
+            ├── overview.txt
+            ├── to-do_list.txt
+```
+
+## Important Files
+
+## src\app.py
+```python
+import streamlit as st
+from pathlib import Path
+import os
+import yaml
+from tkinter import Tk
+from tkinter.filedialog import askdirectory
+import subprocess
+import sys 
+import pyperclip
+
+# Initialize session state variables
+if 'copied' not in st.session_state:
+    st.session_state.copied = False
+
+# Configuration
+CONFIG_FILE = "config.yaml"
+OUTPUT_FILE = "repo-context.txt"
+GLOBAL_FILES_DIR = Path(__file__).parent / "global_files"
+SAVED_CONFIG_FILE = Path(__file__).parent / "saved_config.yaml"
+SCRIPT_DIR = Path(__file__).parent
+
+# Default exclusions
+DEFAULT_EXCLUDED_DIRS = ["node_modules", "venv", "__pycache__", ".git", "dist", "build", "logs", ".idea", ".vscode"]
+DEFAULT_EXCLUDED_FILES = ["repo-context.txt"]
+
+# Ensure necessary directories exist
+GLOBAL_FILES_DIR.mkdir(exist_ok=True)
+
+# Load saved configuration
+def load_saved_config():
+    if SAVED_CONFIG_FILE.exists():
+        try:
+            with open(SAVED_CONFIG_FILE, "r") as f:
+                return yaml.safe_load(f)
+        except yaml.YAMLError:
+            return {}
+    return {}
+
+# Save configuration
+def save_config(config):
+    with open(SAVED_CONFIG_FILE, "w") as f:
+        yaml.dump(config, f)
+
+# Load application configuration
+def load_config():
+    config_path = SCRIPT_DIR / CONFIG_FILE
+    if not config_path.exists():
+        st.error(f"Configuration file {CONFIG_FILE} not found.")
+        st.stop()
+    try:
+        with open(config_path, "r") as f:
+            return yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        st.error(f"Error parsing configuration file: {e}")
+        st.stop()
+
+app_config = load_config()
+saved_config = load_saved_config()
+
+exclude_dirs = app_config.get("exclude_dirs", DEFAULT_EXCLUDED_DIRS)
+
+# Initialize session state for selected_repo_path if not present
+if "selected_repo_path" not in st.session_state:
+    st.session_state["selected_repo_path"] = None
+
+# Streamlit App
+st.title("RePrompt: A Context Generator")
+
+# Folder Selection
+st.sidebar.header("Select a Folder")
+
+def select_folder():
+    try:
+        root = Tk()
+        root.withdraw()  # Hide the main window
+        root.wm_attributes('-topmost', True)  # Keep on top
+        folder_path = askdirectory(parent=root)  # Specify parent window
+        if folder_path:
+            st.session_state["selected_repo_path"] = folder_path
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Error selecting folder: {str(e)}")
+        return False
+    finally:
+        try:
+            root.destroy()  # Ensure window is destroyed
+        except:
+            pass  # Ignore any errors during cleanup
+
+if st.sidebar.button("Choose Folder"):
+    if select_folder():
+        st.sidebar.success(f"Selected folder: {st.session_state['selected_repo_path']}")
+    else:
+        st.sidebar.error("No folder selected.")
+
+# Load previously selected folder
+selected_repo_path = st.session_state.get("selected_repo_path", None)
+
+if selected_repo_path:
+    st.header(f"Selected Repository: {selected_repo_path}")
+    repo_path = Path(selected_repo_path)
+
+    st.subheader("File Filtering")
+    # Retrieve directories and files in the repository
+    all_directories = []
+    all_files = []
+    for root_dir, dirs, files in os.walk(repo_path):
+        rel_root = Path(root_dir).relative_to(repo_path)
+        # Exclude default directories
+        dirs[:] = [d for d in dirs if d not in DEFAULT_EXCLUDED_DIRS]
+        for d in dirs:
+            all_directories.append(str(rel_root / d) + "/")
+        for f in files:
+            all_files.append(str(rel_root / f))
+
+    # Directory selection for Directory Tree
+    selected_directories = st.multiselect(
+        "Include in Directory Tree",
+        options=all_directories,
+        default=saved_config.get("selected_directories", [])
+    )
+
+    # Automatically include files within selected directories unless explicitly excluded
+    included_files = [
+        f for f in all_files if any(str(Path(f).parent) in d for d in selected_directories)
+    ]
+
+    # File exclusions
+    excluded_files = st.multiselect(
+        "Exclude Specific Files",
+        options=[f for f in included_files if f not in DEFAULT_EXCLUDED_FILES],
+        default=[
+            f for f in saved_config.get("excluded_files", [])
+            if f in included_files and f not in DEFAULT_EXCLUDED_FILES
+        ],
+    )
+
+    st.write("### Final Included Files")
+    final_included_files = [f for f in included_files if f not in excluded_files]
+    st.write(final_included_files)
+
+    st.subheader("Generate Context File")
+    if st.button("Generate Context File"):
+        try:
+            # Update config.yaml based on user selections
+            updated_config = {
+                "source_directory": str(repo_path),
+                "exclude_dirs": DEFAULT_EXCLUDED_DIRS,
+                "important_files": final_included_files,
+                "custom_sections": app_config.get("custom_sections", []),
+            }
+
+            # Write updated config.yaml
+            with open(SCRIPT_DIR / CONFIG_FILE, "w") as f:
+                yaml.dump(updated_config, f)
+
+            # Run the script as a subprocess
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT_DIR / "generate_repo_context.py")],
+                cwd=SCRIPT_DIR,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            st.success("Context file generated successfully.")
+            st.write(f"Script output:\n{result.stdout}")
+
+            # Check if the file was created
+            generated_file = SCRIPT_DIR / OUTPUT_FILE
+            if generated_file.exists():
+                with open(generated_file, "r", encoding="utf-8") as f:
+                    context_content = f.read()
+
+                # Replace the current copy button section with this:
+                if context_content.strip():  # Ensure content is not empty
+                    # Add Download Button with unique key
+                    st.download_button(
+                        label="Download repo-context.txt",
+                        data=context_content,
+                        file_name="repo-context.txt",
+                        mime="text/plain",
+                        key="download_button_1"
+                    )
+
+                    st.info("To copy: Click in the text area, press Ctrl+A (Cmd+A on Mac) to select all, then Ctrl+C (Cmd+C on Mac) to copy.")
+
+                    # Create a text area with the content
+                    text_area = st.text_area(
+                        "Generated Context File",
+                        value=context_content,
+                        height=400,
+                        key="context_content"
+                    )
+                else:
+                    st.error("Generated content is empty. Please review your repository and configurations.")
+            else:
+                st.error("Context file not found after script execution.")
+        except subprocess.CalledProcessError as e:
+            st.error("Error generating context file:")
+            if e.stdout:
+                st.text(f"Standard Output:\n{e.stdout}")
+            if e.stderr:
+                st.text(f"Standard Error:\n{e.stderr}")
+
+    # Save configuration for future use
+    if st.button("Save Configuration"):
+        save_config({
+            "selected_directories": selected_directories,
+            "excluded_files": excluded_files,
+        })
+        st.success("Configuration saved successfully.")
+else:
+    st.write("Please select a folder to begin.")
+```
+
+## src\config.yaml
+```
+custom_sections:
+- file: changelog.txt
+  section_title: Changelog
+- file: LICENSE.txt
+  section_title: License
+exclude_dirs:
+- node_modules
+- venv
+- __pycache__
+- .git
+- dist
+- build
+- logs
+- .idea
+- .vscode
+important_files:
+- src\app.py
+- src\config.yaml
+- src\generate_repo_context.py
+- src\index.html
+- src\README.md
+- src\repo-context.txt
+- src\requirements.txt
+- src\saved_config.yaml
+- src\global_files\format_response.md
+- src\static_files\important_info.txt
+- src\static_files\overview.txt
+- src\static_files\to-do_list.txt
+source_directory: C:\Users\user\Documents\GitHub\Context-Tool
+
+```
+
+## src\generate_repo_context.py
+```python
+#!/usr/bin/env python3
+
+"""
+Script Name: generate_repo_context.py
+Description: Generates a context file (`repo-context.txt`) for AI coding assistants.
+             Includes an overview, important information, a directory tree with exclusions,
+             content of important files with syntax highlighting, and a to-do list.
+
+Usage:
+1. Ensure you have Python 3.7 or higher installed.
+
+2. (Optional) Set up a Python virtual environment:
+     python -m venv venv
+     source venv/bin/activate               # On Unix or MacOS
+     venv\Scripts\activate.bat              # On Windows (Command Prompt)
+     venv\Scripts\Activate.ps1              # On Windows (PowerShell)
+
+3. Install the required Python packages:
+     pip install -r requirements.txt
+
+4. Configure `config.yaml` as needed.
+
+5. Place `overview.txt`, `important_info.txt`, and `to-do_list.txt` in the `static_files` directory.
+
+6. Run the script:
+     ./generate_repo_context.py             # Unix-like systems
+     python generate_repo_context.py        # Windows
+     
+The script will create `repo-context.txt` with the specified structure.
+"""
+
+import os
+import sys
+import yaml
+from pathlib import Path
+import logging
+from typing import List, Dict
+from datetime import datetime
+
+# Configuration Constants
+CONFIG_FILE = "config.yaml"
+OUTPUT_FILE = "repo-context.txt"
+
+# Static Text Files and Their Corresponding Section Titles
+STATIC_FILES = [
+    {"file": "overview.txt", "section_title": "Overview"},
+    {"file": "important_info.txt", "section_title": "Important Information"},
+    {"file": "to-do_list.txt", "section_title": "To-Do List"}
+]
+
+# Mapping of File Extensions to Programming Languages for Syntax Highlighting
+LANGUAGE_MAP = {
+    '.py': 'python',
+    '.json': 'json',
+    '.env': 'bash',
+    '.js': 'javascript',
+    '.html': 'html',
+    '.css': 'css',
+    '.csv': 'csv',
+    '.md': 'markdown',
+    '.txt': '',  # Plain text
+    '.xml': 'xml',
+    # Add more mappings as needed
+}
+
+# Extensions of Binary Files to Skip
+BINARY_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.db', '.exe', '.bin']
+
+def setup_logging():
+    """Configures the logging format and level."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(levelname)s] %(message)s'
+    )
+
+def load_config(config_path: Path) -> Dict:
+    """
+    Loads configuration from a YAML file.
+
+    Args:
+        config_path (Path): Path to the YAML configuration file.
+
+    Returns:
+        dict: Configuration dictionary containing 'exclude_dirs', 'important_files', and 'custom_sections'.
+    """
+    if not config_path.exists():
+        logging.error(f"Configuration file {config_path} not found.")
+        sys.exit(1)
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        logging.info(f"Loaded configuration from {config_path}.")
+        return config
+    except yaml.YAMLError as e:
+        logging.error(f"Error parsing configuration file: {e}")
+        sys.exit(1)
+
+def generate_directory_tree(start_path: Path, exclude_dirs: List[str]) -> List[str]:
+    """
+    Generates a directory tree as a list of strings, excluding specified directories.
+
+    Args:
+        start_path (Path): The root directory to start generating the tree from.
+        exclude_dirs (list): List of directory patterns to exclude.
+
+    Returns:
+        list: List of strings representing the directory tree.
+    """
+    tree_lines = []
+    root = start_path.resolve()
+    for dirpath, dirnames, filenames in os.walk(start_path):
+        current_path = Path(dirpath)
+        rel_path = current_path.relative_to(root)
+
+        # Skip excluded directories
+        if any(current_path.match(excl) or excl in rel_path.parts for excl in exclude_dirs):
+            dirnames[:] = []  # Don't traverse further into subdirectories
+            continue
+
+        # Determine the indentation level
+        depth = len(rel_path.parts)
+        indent = "    " * depth
+        connector = "├── " if depth > 0 else "."
+        if depth > 0:
+            tree_lines.append(f"{indent}{connector}{current_path.name}/")
+        else:
+            tree_lines.append(f"{connector}")
+
+        # Add files in the current directory
+        for filename in sorted(filenames):
+            file_rel_path = rel_path / filename
+            if any(file_rel_path.match(excl) or excl in file_rel_path.parts for excl in exclude_dirs):
+                continue
+            file_indent = "    " * (depth + 1)
+            tree_lines.append(f"{file_indent}├── {filename}")
+
+    logging.info("Directory tree generated.")
+    return tree_lines
+
+def write_directory_tree(tree_lines: List[str], output_file: Path):
+    """
+    Writes the directory tree to the output file within markdown code blocks.
+
+    Args:
+        tree_lines (list): List of strings representing the directory tree.
+        output_file (Path): Path to the output file where the tree will be written.
+    """
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write("## Directory Tree with Exclusions\n\n")
+        f.write("```\n")
+        for line in tree_lines:
+            f.write(line + "\n")
+        f.write("```\n\n")
+    logging.info("Directory tree written to the context file.")
+
+def write_file_content(file_path: Path, output_file: Path):
+    """
+    Writes the content of a file to the output file within markdown code blocks with syntax highlighting.
+
+    Args:
+        file_path (Path): Path to the file whose content is to be written.
+        output_file (Path): Path to the output file where the content will be written.
+    """
+    ext = file_path.suffix
+    language = LANGUAGE_MAP.get(ext, '')
+    try:
+        relative_display_path = file_path.relative_to(file_path.parents[1])
+    except ValueError:
+        # If relative_to fails, fallback to absolute path
+        relative_display_path = file_path
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write(f"## {relative_display_path}\n")
+        if language:
+            f.write(f"```{language}\n")
+        else:
+            f.write("```\n")
+        try:
+            if ext in BINARY_EXTENSIONS:
+                # Skip binary files
+                f.write(f"*Binary file ({ext}) cannot be displayed.*\n")
+            else:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as file_content:
+                    content = file_content.read()
+                    f.write(content)
+        except Exception as e:
+            f.write(f"*Error reading file: {e}*\n")
+        f.write("\n```\n\n")
+    logging.info(f"Included content from {file_path}.")
+
+def write_static_file(file_path: Path, output_file: Path, section_title: str):
+    """
+    Writes the content of a static text file to the output file with a section header.
+
+    Args:
+        file_path (Path): Path to the static text file.
+        output_file (Path): Path to the output file where the content will be written.
+        section_title (str): Title of the section to be added before the content.
+    """
+    if not file_path.exists():
+        logging.warning(f"Static file {file_path} not found, skipping...")
+        return
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write(f"## {section_title}\n\n")
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as sf:
+                content = sf.read()
+                f.write(content + "\n\n")
+        except Exception as e:
+            f.write(f"*Error reading {file_path.name}: {e}*\n\n")
+            logging.error(f"Error reading {file_path}: {e}")
+    logging.info(f"Included static section: {section_title}.")
+
+def write_custom_sections(custom_sections: List[Dict], script_dir: Path, output_file: Path):
+    """
+    Writes custom sections to the output file based on configuration.
+
+    Args:
+        custom_sections (list): List of dictionaries with 'file' and 'section_title'.
+        script_dir (Path): Directory where the script is located.
+        output_file (Path): Path to the output file.
+    """
+    for section in custom_sections:
+        file_name = section.get('file')
+        section_title = section.get('section_title', 'Custom Section')
+        file_path = script_dir / "static_files" / file_name
+        write_static_file(file_path, output_file, section_title)
+
+def append_xml_section(output_file: Path):
+    """
+    Appends the XML section to the output file within markdown code blocks.
+
+    Args:
+        output_file (Path): Path to the output file where the XML section will be appended.
+    """
+    xml_content = """
+## XML Section
+
+```xml
+<code_changes>
+  <changed_files>
+    <file>
+      <file_operation>CREATE</file_operation>
+      <file_path>app/new_file.py</file_path>
+      <file_code><![CDATA[
+# New Python file
+def new_function():
+    pass
+]]></file_code>
+    </file>
+    <!-- Add more file changes here -->
+  </changed_files>
+</code_changes>
+```
+
+**Other rules:**
+- DO NOT remove `<ai_context>` sections. These are to provide you additional context about each file.
+- If you create a file, add an `<ai_context>` comment section at the top of the file.
+- If you update a file make sure its `<ai_context>` stays up-to-date.
+- DO NOT add comments related to your edits.
+- DO NOT remove my existing comments.
+"""
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write(xml_content + "\n")
+    logging.info("XML section appended to the context file.")
+
+def main():
+    """Main function that orchestrates the generation of the repository context file."""
+    setup_logging()
+
+    # Determine the script's directory
+    script_dir = Path(__file__).parent.resolve()
+
+    # Load configuration
+    config_path = script_dir / CONFIG_FILE
+    config = load_config(config_path)
+    exclude_dirs = config.get("exclude_dirs", [])
+    important_files = config.get("important_files", [])
+    custom_sections = config.get("custom_sections", [])
+
+    # Define the starting path (default to 'src' directory or as specified)
+    source_dir = config.get("source_directory", "src")
+    start_path = script_dir.parent / source_dir
+    if not start_path.exists():
+        logging.error(f"Source directory {start_path} does not exist.")
+        sys.exit(1)
+
+    output_file = script_dir / OUTPUT_FILE
+    output_file.unlink(missing_ok=True)  # Remove if exists
+
+    # Write a header to the output file
+    with output_file.open('w', encoding='utf-8') as f:
+        f.write(f"# Repository Context\n\n")
+        f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d')}\n\n")
+
+    # Write static sections
+    for static in STATIC_FILES:
+        static_path = script_dir / "static_files" / static["file"]
+        write_static_file(static_path, output_file, static["section_title"])
+
+    # Generate and write the directory tree
+    tree_lines = generate_directory_tree(start_path, exclude_dirs)
+    write_directory_tree(tree_lines, output_file)
+
+    # Write important files
+    with output_file.open('a', encoding='utf-8') as f:
+        f.write("## Important Files\n\n")
+    for relative_file in important_files:
+        file_path = start_path / relative_file
+        if file_path.exists():
+            write_file_content(file_path, output_file)
+        else:
+            with output_file.open('a', encoding='utf-8') as f:
+                f.write(f"*File `{relative_file}` not found, skipping...*\n\n")
+            logging.warning(f"Important file {relative_file} not found, skipping...")
+
+    # Write custom sections if any
+    if custom_sections:
+        write_custom_sections(custom_sections, script_dir, output_file)
+
+    # Write to-do list
+    todo_path = script_dir / "static_files" / "to-do_list.txt"
+    write_static_file(todo_path, output_file, "To-Do List")
+
+    # Append XML section
+    append_xml_section(output_file)
+
+    logging.info(f"Context file created: {output_file}")
+
+if __name__ == "__main__":
+    main()
+
+```
+
+## src\index.html
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Generate context files for repositories with ease. Streamline AI coding assistant interactions."
+    />
+    <title>Repository Context Generator</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 0;
+        background: #f4f4f9;
+        color: #333;
+      }
+      header {
+        background: #6200ea;
+        color: white;
+        padding: 20px 0;
+        text-align: center;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 2.5rem;
+      }
+      header p {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+      .container {
+        max-width: 900px;
+        margin: 20px auto;
+        padding: 0 20px;
+      }
+      .cta {
+        background: #fff;
+        padding: 20px;
+        margin: 20px 0;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .cta h2 {
+        margin: 0 0 10px;
+        font-size: 1.8rem;
+      }
+      .cta p {
+        margin: 0 0 20px;
+      }
+      .cta a {
+        display: inline-block;
+        text-decoration: none;
+        background: #6200ea;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 4px;
+        font-size: 1.2rem;
+      }
+      .cta a:hover {
+        background: #4500b3;
+      }
+      footer {
+        background: #333;
+        color: white;
+        text-align: center;
+        padding: 10px 0;
+        margin-top: 20px;
+      }
+      footer p {
+        margin: 0;
+        font-size: 0.9rem;
+      }
+      footer a {
+        color: #6200ea;
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Repository Context Generator</h1>
+      <p>Your tool for creating comprehensive repository context files</p>
+    </header>
+
+    <div class="container">
+      <section class="cta">
+        <h2>Get Started</h2>
+        <p>
+          Generate a context file for your repository, including key details,
+          directory structure, and more.
+        </p>
+        <a href="http://localhost:8501" target="_blank">Open the Application</a>
+      </section>
+
+      <section>
+        <h2>How It Works</h2>
+        <p>
+          This tool simplifies interactions with AI coding assistants by
+          generating a structured context file. You can customize directory
+          exclusions, include important files, and add global documentation.
+        </p>
+        <ul>
+          <li>Clone repositories easily via the app.</li>
+          <li>Customize context settings to suit your project.</li>
+          <li>Download the generated context file directly from the app.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Features</h2>
+        <ul>
+          <li>Supports multiple repositories.</li>
+          <li>Includes static documentation sections.</li>
+          <li>Customizable exclusions and global file inclusions.</li>
+          <li>Syntax-highlighted file contents.</li>
+        </ul>
+      </section>
+    </div>
+
+    <footer>
+      <p>
+        &copy; 2025 Repository Context Generator. Built with
+        <a href="https://streamlit.io" target="_blank">Streamlit</a>.
+      </p>
+    </footer>
+  </body>
+</html>
+
+```
+
+## src\README.md
+```markdown
+Certainly! Below is the updated `README.md` for your **Repository Context Generator Web App**, which includes detailed run commands and clarifies the setup process. This update ensures that users can easily follow the steps to install, activate the virtual environment, install dependencies, and run the Streamlit application.
+
+---
+
+# Repository Context Generator Web App
+
+The **Repository Context Generator** is a Streamlit-based web application designed to create a comprehensive context file (`repo-context.txt`) for AI coding assistants like ChatGPT. This context file aggregates essential information from your repository, including an overview, key details, a directory tree with exclusions, contents of important files with syntax highlighting, and a to-do list. Additionally, it supports the inclusion of global files that are incorporated into every generated context, regardless of the selected repository.
+
+## **Features**
+
+- **Repository Selection**: Choose from existing repositories or add new ones by providing their Git URLs.
+- **File Filtering**: Select which files to include or exclude from the prompt and directory tree.
+- **Global Files Management**: Add files that will be included in every generated context.
+- **Context File Generation**: Generate and download a tailored `repo-context.txt` file.
+- **XML Section Integration**: Automatically append an XML section adhering to specified formatting rules.
+
+## **Prerequisites**
+
+- **Python 3.7 or higher**: Ensure Python is installed on your system. Download it from [python.org](https://www.python.org/downloads/).
+- **Git**: To clone repositories. Download from [git-scm.com](https://git-scm.com/downloads).
+
+## **Directory Structure**
+
+```
+repository-context-generator/
+├── app.py
+├── generate_repo_context.py
+├── config.yaml
+├── requirements.txt
+├── global_files/
+│   └── global.xml
+├── static_files/
+│   ├── overview.txt
+│   ├── important_info.txt
+│   └── to-do_list.txt
+└── README.md
+```
+
+## **Setup Guide**
+
+### **1. Clone the Repository**
+
+Clone this repository to your local machine using Git:
+
+```bash
+git clone <repository-url>
+cd repository-context-generator
+```
+
+_Replace `<repository-url>` with the actual URL of your repository._
+
+### **2. Set Up Python Virtual Environment (Optional but Recommended)**
+
+Using a virtual environment isolates your project's dependencies, preventing conflicts with other projects.
+
+#### **a. Create a Virtual Environment**
+
+```bash
+python -m venv venv
+```
+
+#### **b. Activate the Virtual Environment**
+
+- **On Windows (Command Prompt):**
+
+  ```cmd
+  venv\Scripts\activate.bat
+  ```
+
+- **On Windows (PowerShell):**
+
+  ```powershell
+  .\venv\Scripts\Activate.ps1
+  ```
+
+  **Note:** If you encounter an execution policy error in PowerShell, you may need to adjust the execution policy:
+
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+
+  Then, try activating the virtual environment again.
+
+- **On macOS and Linux:**
+
+  ```bash
+  source venv/bin/activate
+  ```
+
+**Successful Activation:**
+
+Once activated, your terminal prompt should change to indicate that you're now working within the virtual environment, e.g., `(venv) $`.
+
+### **3. Install Required Packages**
+
+With the virtual environment activated, install the necessary Python packages using `pip`:
+
+```bash
+pip install -r requirements.txt
+```
+
+### **4. Configure the Application**
+
+Customize the `config.yaml` file to control which directories and files are included or excluded in the generated context.
+
+1. **Locate `config.yaml`**: It's in the root directory of the cloned repository.
+
+2. **Edit `config.yaml`**:
+   - **Exclude Directories**: Modify the `exclude_dirs` section to exclude any directories you don't want in the context.
+   - **Important Files**: List the key files under the `important_files` section that should be included with their content.
+   - **Custom Sections**: Define any additional sections you want to include.
+
+_Refer to the [Customization](#customization) section for detailed instructions._
+
+### **5. Add Static and Global Files**
+
+Ensure that the following files are present:
+
+- **Static Files**: Place `overview.txt`, `important_info.txt`, and `to-do_list.txt` inside the `static_files/` directory.
+- **Global Files**: Place any global files (e.g., `global.xml`) inside the `global_files/` directory.
+
+### **6. Running the Application**
+
+Launch the Streamlit web application:
+
+```bash
+streamlit run app.py
+```
+
+This command will open the application in your default web browser. If it doesn't open automatically, navigate to [http://localhost:8501](http://localhost:8501) in your browser.
+
+**Additional Run Commands:**
+
+- **Deactivate the Virtual Environment (When Done):**
+
+  ```bash
+  deactivate
+  ```
+
+- **Reactivating the Virtual Environment:**
+
+  Navigate back to the project directory and activate the virtual environment as described in **Step 2b**.
+
+## **Customization**
+
+### **Modifying `config.yaml`**
+
+The `config.yaml` file allows you to tailor the context generation process to your project's needs.
+
+```yaml
+# Configuration for Repository Context Generator
+
+# Primary source directory containing the main codebase.
+# Update this if your main code is not in 'src/'.
+source_directory: src
+
+# List of directories to exclude from the directory tree and file inclusions.
+exclude_dirs:
+  - node_modules # Node.js dependencies
+  - venv # Python virtual environment
+  - __pycache__ # Python bytecode cache
+  - build # Build output directories
+  - dist # Distribution packages
+  - .git # Git repository metadata
+  - .github # GitHub workflows and configurations
+  - .vscode # Visual Studio Code settings
+  - logs # Log files
+  - tmp # Temporary files and directories
+
+# List of important files to include in the context.
+# Paths should be relative to the 'source_directory' specified above.
+important_files:
+  - main.py # Entry point of the application
+  - app.py # Application configuration
+  - config/settings.py # Configuration settings
+  - utils/helpers.py # Utility helper functions
+  - models/user.py # User model definitions
+  - controllers/auth_controller.py # Authentication controller
+  - services/email_service.py # Email service integration
+  - routes/api_routes.py # API route definitions
+  - database/db_connection.py # Database connection setup
+  - tests/test_main.py # Main application tests
+
+# Custom sections to include additional information.
+custom_sections:
+  - file: changelog.txt
+    section_title: "Changelog"
+  - file: LICENSE.txt
+    section_title: "License"
+```
+
+**Instructions for Customization:**
+
+1. **`source_directory`**:
+
+   - Set this to the primary directory containing your source code.
+   - Example: For a project with main code in `app/`, set `source_directory: app`.
+
+2. **`exclude_dirs`**:
+
+   - Review the list and remove any directories that are essential for your project context.
+   - Add any additional directories you want to exclude by appending them to the list.
+   - Example: If your project uses a `docs/` directory for documentation, you might choose to exclude it:
+     ```yaml
+     - docs
+     ```
+
+3. **`important_files`**:
+
+   - Identify the key files in your project that define its core functionality.
+   - Ensure the paths are relative to your `source_directory`.
+   - Add or remove files as necessary to reflect your project's structure.
+   - Example: For a JavaScript project, you might include:
+     ```yaml
+     - index.js
+     - src/app.js
+     - src/routes/index.js
+     - src/controllers/userController.js
+     ```
+
+4. **`custom_sections`**:
+   - Define additional sections by specifying the file and its corresponding section title.
+   - Ensure the specified files exist in the `static_files/` directory or provide their paths accordingly.
+
+## **Additional Notes**
+
+- **Global Files**: Files placed in the `global_files/` directory are included in every generated context, regardless of the selected repository. For example, `global.xml` can be used to enforce specific formatting rules across all contexts.
+
+- **Syntax Highlighting**: The script supports syntax highlighting for common file types like `.py`, `.js`, `.json`, etc. To add more file types, update the `LANGUAGE_MAP` in `generate_repo_context.py`.
+
+- **Source Directory**: By default, the script assumes your main source code is in the `src/` directory. If your project uses a different structure, update the `source_directory` in `config.yaml`.
+
+- **Error Handling**: The application includes basic error handling to notify users of missing files or configuration issues. Ensure all necessary files are present to avoid errors.
+
+## **Contributing**
+
+Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+
+## **License**
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## **Conclusion**
+
+By following the above setup and utilizing the provided scripts, you can efficiently generate comprehensive context files for your repositories directly from your browser. The integration of global files ensures consistency across all generated contexts, while the interactive interface simplifies repository management and file filtering.
+
+Feel free to customize and extend the application to better fit your specific requirements. Contributions and feedback are highly appreciated!
+
+---
+
+```
+
+
+```
+
+## src\requirements.txt
+```
+Flask
+Flask-Cors
+GitPython
+PyYAML
+streamlit
+pyperclip
+```
+
+## src\saved_config.yaml
+```
+excluded_files: []
+selected_directories:
+- src/
+- src\global_files/
+- src\static_files/
+
+```
+
+## global_files\format_response.md
+```markdown
+Present a complete plan to solve the problem and implement it in the codebase.
+
+At the end of your response, respond with the following XML section (if applicable).
+
+XML Section:
+   - Do not get lazy. Always output the full code in the XML section.
+   - Enclose this entire section in a markdown codeblock
+   - Include all of the changed files
+   - Specify each file operation with CREATE, UPDATE, or DELETE
+   - For CREATE or UPDATE operations, include the full file code
+   - Include the full file path (relative to the project directory, good: app/page.tsx, bad: /Users/mckaywrigley/Desktop/projects/new-chat-template/app/page.tsx)
+   - Enclose the code with ![CDATA[__CODE HERE__]]
+   - Use the following XML structure:
+
+```xml
+<code_changes>
+  <changed_files>
+    <file>
+      <file_operation>__FILE OPERATION HERE__</file_operation>
+      <file_path>__FILE PATH HERE__</file_path>
+      <file_code><![CDATA[
+__FULL FILE CODE HERE__
+]]></file_code>
+    </file>
+    __REMAINING FILES HERE__
+  </changed_files>
+</code_changes>
+```
+
+Other rules:
+- DO NOT remove <ai_context> sections. These are to provide you additional context about each file.
+- If you create a file, add an <ai_context> comment section at the top of the file.
+- If you update a file make sure its <ai_context> stays up-to-date
+- DO NOT add comments related to your edits
+- DO NOT remove my existing comments
+
+We may go back and forth a few times. If we do, remember to continue to output the entirety of the code in an XML section (if applicable).
+
+Take all the time you need.
+```
+
+## static_files\important_info.txt
+```
+
+```
+
+## static_files\overview.txt
+```
+# Project Overview
+
+This project is designed to generate a comprehensive context file for AI coding assistants. It aggregates essential information from your repository, enabling more informed and efficient interactions with AI tools.
+
+```
+
+## static_files\to-do_list.txt
+```
+
+```
+
+## To-Do List
+
+
+
+
+## XML Section
+
+```xml
+<code_changes>
+  <changed_files>
+    <file>
+      <file_operation>CREATE</file_operation>
+      <file_path>app/new_file.py</file_path>
+      <file_code><![CDATA[
+# New Python file
+def new_function():
+    pass
+]]></file_code>
+    </file>
+    <!-- Add more file changes here -->
+  </changed_files>
+</code_changes>
+```
+
+**Other rules:**
+- DO NOT remove `<ai_context>` sections. These are to provide you additional context about each file.
+- If you create a file, add an `<ai_context>` comment section at the top of the file.
+- If you update a file make sure its `<ai_context>` stays up-to-date.
+- DO NOT add comments related to your edits.
+- DO NOT remove my existing comments.
+
