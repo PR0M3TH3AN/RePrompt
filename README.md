@@ -1,14 +1,18 @@
-# Repository Context Generator
+# RePrompt: A Context Generator
 
-The **Repository Context Generator** is a tool designed to create a comprehensive context file (`repo-context.txt`) for AI coding assistants like ChatGPT. This context file aggregates essential information from your repository, including an overview, key details, a directory tree with exclusions, contents of important files with syntax highlighting, and a to-do list. This facilitates more informed and efficient interactions with AI assistants regarding your codebase.
+The **RePrompt** is a tool designed to create a comprehensive context file (`repo-context.txt`) for AI coding assistants like ChatGPT. The context file aggregates essential information from your repository, including an overview, directory tree, excluded and included files, highlighted file contents, and additional static sections like a to-do list.
 
 ## Features
 
-- **Context File Generation**: Creates a `repo-context.txt` file tailored for AI assistants.
-- **Configurable Directory Tree**: Generates a directory tree with the ability to exclude specified directories.
-- **Highlighted File Contents**: Incorporates important files with syntax highlighting based on their file types.
-- **Static Content Integration**: Adds static sections from files such as `overview.txt`, `important_info.txt`, and `to-do_list.txt`.
-- **Extensible Configuration**: Easily customize exclusions, important files, and additional sections via `config.yaml`.
+- **Streamlit Web App**: Intuitive interface to select folders, configure file inclusions/exclusions, and generate the context file.
+- **Context File Generation**: Produces a `repo-context.txt` file tailored for AI assistants.
+- **Configurable Directory Tree**: Exclude specified directories and files from the context.
+- **File Content Integration**: Includes syntax-highlighted contents of key files.
+- **Static Content Integration**: Adds static sections from files such as `overview.txt` and `to-do_list.txt`.
+- **Save & Load Configurations**: Retain file inclusion/exclusion preferences for future sessions.
+- **Default Exclusions**: Automatically excludes `node_modules`, `venv`, `__pycache__`, and `repo-context.txt` to avoid unnecessary content in the context.
+
+---
 
 ## Table of Contents
 
@@ -16,21 +20,27 @@ The **Repository Context Generator** is a tool designed to create a comprehensiv
 - [Prerequisites](#prerequisites)
 - [Setup Guide](#setup-guide)
   - [Step 1: Clone the Repository](#step-1-clone-the-repository)
-  - [Step 2: Set Up Python Virtual Environment (Optional but Recommended)](#step-2-set-up-python-virtual-environment-optional-but-recommended)
+  - [Step 2: Set Up a Python Virtual Environment](#step-2-set-up-a-python-virtual-environment)
   - [Step 3: Install Required Packages](#step-3-install-required-packages)
-  - [Step 4: Configure the Script](#step-4-configure-the-script)
-  - [Step 5: Running the Script](#step-5-running-the-script)
-- [Output](#output)
+  - [Step 4: Run the Streamlit Application](#step-4-run-the-streamlit-application)
+- [How to Use](#how-to-use)
+  - [Selecting a Folder](#selecting-a-folder)
+  - [Configuring Inclusions and Exclusions](#configuring-inclusions-and-exclusions)
+  - [Generating the Context File](#generating-the-context-file)
+  - [Saving and Loading Configurations](#saving-and-loading-configurations)
 - [Customization](#customization)
-  - [Modifying `config.yaml`](#modifying-configyaml)
-- [Additional Notes](#additional-notes)
 - [Contributing](#contributing)
 - [License](#license)
 
+---
+
 ## Prerequisites
 
-- **Python 3.7 or higher**: Ensure Python is installed on your system. You can download it from [python.org](https://www.python.org/downloads/).
+- **Python 3.7 or higher**: Ensure Python is installed on your system. Download it from [python.org](https://www.python.org/downloads/).
+- **Streamlit**: The tool is built using the Streamlit web framework.
 - **Git**: To clone the repository. Download from [git-scm.com](https://git-scm.com/downloads).
+
+---
 
 ## Setup Guide
 
@@ -43,173 +53,125 @@ git clone <repository-url>
 cd <repository-directory>
 ```
 
-_Replace `<repository-url>` with the actual URL of your repository and `<repository-directory>` with the cloned directory name._
+_Replace `<repository-url>` with the actual repository URL._
 
-### Step 2: Set Up Python Virtual Environment (Optional but Recommended)
+---
 
-Using a virtual environment isolates your project's dependencies, preventing conflicts with other projects.
+### Step 2: Set Up a Python Virtual Environment
 
-1. **Create a Virtual Environment**:
+A virtual environment helps isolate dependencies:
+
+1. Create a virtual environment:
 
    ```bash
    python3 -m venv venv
    ```
 
-2. **Activate the Virtual Environment**:
-
+2. Activate the virtual environment:
    - **macOS and Linux**:
-
      ```bash
      source venv/bin/activate
      ```
-
-   - **Windows (Command Prompt)**:
+   - **Windows**:
      ```bash
      venv\Scripts\activate
      ```
 
+---
+
 ### Step 3: Install Required Packages
 
-Install the necessary Python packages using `pip`:
+Install the required dependencies using `pip`:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Step 4: Configure the Script
+---
 
-Customize the `config.yaml` file to control which directories and files are included or excluded in the generated context.
+### Step 4: Run the Streamlit Application
 
-1. **Locate `config.yaml`**: It's in the root directory of the cloned repository.
+Start the application with the following command:
 
-2. **Edit `config.yaml`**:
-   - **Exclude Directories**: Modify the `exclude_dirs` section to exclude any directories you don't want in the context.
-   - **Important Files**: List the key files under the `important_files` section that should be included with their content.
+```bash
+streamlit run app.py
+```
 
-_Refer to the [Customization](#customization) section for detailed instructions._
+The application will open in your default web browser. If not, follow the link provided in the terminal (e.g., `http://localhost:8501`).
 
-### Step 5: Running the Script
+---
 
-Execute the script to generate the `repo-context.txt` file.
+## How to Use
 
-- **Unix-like Systems (macOS, Linux)**:
+### Selecting a Folder
 
-  ```bash
-  chmod +x generate_repo_context.py  # Make the script executable (optional)
-  ./generate_repo_context.py
-  ```
+1. Use the **Choose Folder** button in the sidebar to open a folder selection dialog.
+2. Select the root folder of the repository for which you want to generate the context file.
 
-  Or simply:
+---
 
-  ```bash
-  python3 generate_repo_context.py
-  ```
+### Configuring Inclusions and Exclusions
 
-- **Windows**:
+1. **Directory Tree**: Use the directory multiselect to include specific directories in the context file.
+2. **File Exclusions**: Automatically include files within selected directories but exclude specific files if needed.
+3. **Default Exclusions**:
+   - The following are excluded by default: `node_modules`, `venv`, `__pycache__`, `.git`, `dist`, `build`, `logs`, `.idea`, `.vscode`, and `repo-context.txt`.
 
-  ```bash
-  python generate_repo_context.py
-  ```
+---
 
-## Output
+### Generating the Context File
 
-After running the script, a `repo-context.txt` file will be generated in the current directory. This file includes the following sections:
+1. After configuring inclusions and exclusions, click the **Generate Context File** button.
+2. The context file will be created, and a **Download** button will appear for you to save the `repo-context.txt`.
 
-- **Overview**: Content from `overview.txt`
-- **Important Information**: Content from `important_info.txt`
-- **Directory Tree**: Structure of your project with specified exclusions
-- **Important Files**: Contents of key files with syntax highlighting
-- **To-Do List**: Content from `to-do_list.txt`
+---
+
+### Saving and Loading Configurations
+
+- **Save Configuration**: Use the "Save Configuration" button to save your current settings (selected directories and excluded files).
+- **Load Configuration**: The app automatically loads the saved configuration at startup.
+
+---
 
 ## Customization
 
-### Modifying `config.yaml`
+### Modifying Default Exclusions
 
-The `config.yaml` file allows you to tailor the context generation process to your project's needs.
+To modify the default exclusions, edit the `DEFAULT_EXCLUDED_DIRS` and `DEFAULT_EXCLUDED_FILES` lists in `app.py`:
 
-#### 1. **Exclude Directories**
-
-Specify directories that should be omitted from the directory tree and file inclusions.
-
-```yaml
-exclude_dirs:
-  - node_modules # Node.js dependencies
-  - venv # Python virtual environment
-  - __pycache__ # Python bytecode cache
-  - build # Build output directories
-  - dist # Distribution packages
-  - .git # Git repository metadata
-  - .github # GitHub workflows and configurations
-  - .vscode # Visual Studio Code settings
-  - logs # Log files
-  - tmp # Temporary files and directories
+```python
+DEFAULT_EXCLUDED_DIRS = ["node_modules", "venv", "__pycache__", ".git", "dist", "build", "logs", ".idea", ".vscode"]
+DEFAULT_EXCLUDED_FILES = ["repo-context.txt"]
 ```
 
-_Add or remove directories as needed._
+---
 
-#### 2. **Important Files**
+### Using the Configuration File
 
-List the crucial files whose content should be included in the context file. Paths should be relative to the main source directory (default is `src/`).
+The `config.yaml` file allows further customization:
 
-```yaml
-important_files:
-  - main.py # Entry point of the application
-  - app.py # Application configuration
-  - config/settings.py # Configuration settings
-  - utils/helpers.py # Utility helper functions
-  - models/user.py # User model definitions
-  - controllers/auth_controller.py# Authentication controller
-  - services/email_service.py # Email service integration
-  - routes/api_routes.py # API route definitions
-  - database/db_connection.py # Database connection setup
-  - tests/test_main.py # Main application tests
-```
+1. **Exclude Directories**:
+   ```yaml
+   exclude_dirs:
+     - node_modules
+     - venv
+     - __pycache__
+   ```
+2. **Important Files**:
+   ```yaml
+   important_files:
+     - main.py
+     - app.py
+   ```
 
-_Update the list based on your project's structure._
-
-#### 3. **Additional Configuration (Optional)**
-
-Uncomment and customize additional sections for more advanced configurations.
-
-```yaml
-# List of file types to include based on extensions.
-file_type_inclusions:
-  - .js
-  - .ts
-  - .java
-  - .rb
-  - .go
-
-# List of file types to exclude based on extensions.
-file_type_exclusions:
-  - .log
-  - .tmp
-  - .png
-  - .jpg
-  - .gif
-
-# Custom sections to include additional information.
-custom_sections:
-  - file: changelog.txt
-    section_title: "Changelog"
-  - file: LICENSE.txt
-    section_title: "License"
-```
-
-_Customize these sections as per your project requirements._
-
-## Additional Notes
-
-- **Static Files**: Ensure that `overview.txt`, `important_info.txt`, and `to-do_list.txt` are present in the same directory as `generate_repo_context.py`.
-- **Syntax Highlighting**: The script supports syntax highlighting for common file types like `.py`, `.js`, `.json`, etc. To add more file types, update the `LANGUAGE_MAP` in the script.
-- **Source Directory**: By default, the script assumes your main source code is in the `src/` directory. If your project uses a different structure, update the `start_path` in the script or make it configurable.
+---
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+Contributions are welcome! Feel free to submit pull requests or open issues for bug fixes, enhancements, or feature requests.
+
+---
 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
----
