@@ -44,9 +44,6 @@ git clone https://github.com/PR0M3TH3AN/RePrompt
 cd RePrompt
 ```
 
-Here's the updated section:
-
-````markdown
 ### 2. Context Files (Optional)
 
 The tool looks for these files to provide additional context to AI assistants. While not required for basic functionality, they enhance the AI's understanding of your project:
@@ -57,6 +54,7 @@ src/static_files/
 ├── important_info.txt # Critical information AI should know
 └── to-do_list.txt    # Current project tasks and goals
 ```
+
 ````
 
 These files are read when generating the context file. If they don't exist, the tool will still work but those sections will be empty in the generated context. Update these files with relevant information about your project to improve AI assistance.
@@ -239,3 +237,4 @@ custom_sections:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+````
