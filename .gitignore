@@ -6,9 +6,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Encrypted index file should be backed up, hence not ignored
-!.deterministic_password_generator/password_indices.csv
-
 # Ignore system files
 .DS_Store
 Thumbs.db
@@ -16,7 +13,38 @@ Thumbs.db
 # Ignore logs and temporary files
 *.log
 *.tmp
+logs/
+tmp/
 
-# Python env
+# Ignore Python environment and configuration files
 .env
 *.env
+*.config.yaml
+saved_config.yaml
+
+# Ignore application-generated files
+repo-context.txt
+
+# Ignore static files generated for UI
+static_files/*.txt
+static_files/*.log
+
+# Ignore IDE configuration files
+.idea/
+.vscode/
+
+# Ignore dependency management files
+*.lock
+
+# Ignore build artifacts
+build/
+dist/
+*.egg-info/
+
+# Ignore test output files
+tests/__pycache__/
+tests/*.py[cod]
+
+# Ignore specific output folders or other user-defined directories
+output/
+generated/
