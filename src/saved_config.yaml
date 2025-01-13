@@ -1,0 +1,5 @@
+excluded_files: []
+selected_directories:
+- src/
+- src\global_files/
+- src\static_files/

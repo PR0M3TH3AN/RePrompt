@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Script Name: generate_repo-context.py
+Script Name: generate_repo_context.py
 Description: Generates a context file (`repo-context.txt`) for AI coding assistants.
              Includes an overview, important information, a directory tree with exclusions,
              content of important files with syntax highlighting, and a to-do list.
@@ -23,8 +23,8 @@ Usage:
 5. Place `overview.txt`, `important_info.txt`, and `to-do_list.txt` in the script directory.
 
 6. Run the script:
-     ./generate_repo-context.py             # Unix-like systems
-     python generate_repo-context.py        # Windows
+     ./generate_repo_context.py             # Unix-like systems
+     python generate_repo_context.py        # Windows
      
 The script will create `repo-context.txt` with the specified structure.
 """

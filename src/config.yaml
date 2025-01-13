@@ -1,39 +1,28 @@
-# Configuration for Repository Context Generator
-
-# Primary source directory containing the main codebase.
-# Update this if your main code is not in 'src/'.
-source_directory: src
-
-# List of directories to exclude from the directory tree and file inclusions.
-exclude_dirs:
-  - node_modules # Node.js dependencies
-  - venv # Python virtual environment
-  - __pycache__ # Python bytecode cache
-  - build # Build output directories
-  - dist # Distribution packages
-  - .git # Git repository metadata
-  - .github # GitHub workflows and configurations
-  - .vscode # Visual Studio Code settings
-  - logs # Log files
-  - tmp # Temporary files and directories
-
-# List of important files to include in the context.
-# Paths should be relative to the 'source_directory' specified above.
-important_files:
-  - main.py # Entry point of the application
-  - app.py # Application configuration
-  - config/settings.py # Configuration settings
-  - utils/helpers.py # Utility helper functions
-  - models/user.py # User model definitions
-  - controllers/auth_controller.py # Authentication controller
-  - services/email_service.py # Email service integration
-  - routes/api_routes.py # API route definitions
-  - database/db_connection.py # Database connection setup
-  - tests/test_main.py # Main application tests
-
-# Custom sections to include additional information.
 custom_sections:
-  - file: changelog.txt
-    section_title: "Changelog"
-  - file: LICENSE.txt
-    section_title: "License"
+- file: changelog.txt
+  section_title: Changelog
+- file: LICENSE.txt
+  section_title: License
+exclude_dirs:
+- node_modules
+- venv
+- __pycache__
+- .git
+- dist
+- build
+- logs
+- .idea
+- .vscode
+important_files:
+- src\app.py
+- src\config.yaml
+- src\generate_repo_context.py
+- src\index.html
+- src\README.md
+- src\requirements.txt
+- src\saved_config.yaml
+- src\global_files\format_response.md
+- src\static_files\important_info.txt
+- src\static_files\overview.txt
+- src\static_files\to-do_list.txt
+source_directory: C:\Users\user\Documents\GitHub\Context-Tool

@@ -43,7 +43,7 @@ git clone <repository-url>
 cd <repository-directory>
 ```
 
-*Replace `<repository-url>` with the actual URL of your repository and `<repository-directory>` with the cloned directory name.*
+_Replace `<repository-url>` with the actual URL of your repository and `<repository-directory>` with the cloned directory name._
 
 ### Step 2: Set Up Python Virtual Environment (Optional but Recommended)
 
@@ -58,18 +58,14 @@ Using a virtual environment isolates your project's dependencies, preventing con
 2. **Activate the Virtual Environment**:
 
    - **macOS and Linux**:
+
      ```bash
      source venv/bin/activate
      ```
-   
+
    - **Windows (Command Prompt)**:
      ```bash
-     venv\Scripts\activate.bat
-     ```
-   
-   - **Windows (PowerShell)**:
-     ```bash
-     venv\Scripts\Activate.ps1
+     venv\Scripts\activate
      ```
 
 ### Step 3: Install Required Packages
@@ -90,29 +86,29 @@ Customize the `config.yaml` file to control which directories and files are incl
    - **Exclude Directories**: Modify the `exclude_dirs` section to exclude any directories you don't want in the context.
    - **Important Files**: List the key files under the `important_files` section that should be included with their content.
 
-*Refer to the [Customization](#customization) section for detailed instructions.*
+_Refer to the [Customization](#customization) section for detailed instructions._
 
 ### Step 5: Running the Script
 
 Execute the script to generate the `repo-context.txt` file.
 
 - **Unix-like Systems (macOS, Linux)**:
-  
+
   ```bash
-  chmod +x generate_repo-context.py  # Make the script executable (optional)
-  ./generate_repo-context.py
+  chmod +x generate_repo_context.py  # Make the script executable (optional)
+  ./generate_repo_context.py
   ```
 
   Or simply:
 
   ```bash
-  python3 generate_repo-context.py
+  python3 generate_repo_context.py
   ```
 
 - **Windows**:
 
   ```bash
-  python generate_repo-context.py
+  python generate_repo_context.py
   ```
 
 ## Output
@@ -137,19 +133,19 @@ Specify directories that should be omitted from the directory tree and file incl
 
 ```yaml
 exclude_dirs:
-  - node_modules          # Node.js dependencies
-  - venv                  # Python virtual environment
-  - __pycache__           # Python bytecode cache
-  - build                 # Build output directories
-  - dist                  # Distribution packages
-  - .git                  # Git repository metadata
-  - .github               # GitHub workflows and configurations
-  - .vscode               # Visual Studio Code settings
-  - logs                  # Log files
-  - tmp                   # Temporary files and directories
+  - node_modules # Node.js dependencies
+  - venv # Python virtual environment
+  - __pycache__ # Python bytecode cache
+  - build # Build output directories
+  - dist # Distribution packages
+  - .git # Git repository metadata
+  - .github # GitHub workflows and configurations
+  - .vscode # Visual Studio Code settings
+  - logs # Log files
+  - tmp # Temporary files and directories
 ```
 
-*Add or remove directories as needed.*
+_Add or remove directories as needed._
 
 #### 2. **Important Files**
 
@@ -157,19 +153,19 @@ List the crucial files whose content should be included in the context file. Pat
 
 ```yaml
 important_files:
-  - main.py                       # Entry point of the application
-  - app.py                        # Application configuration
-  - config/settings.py            # Configuration settings
-  - utils/helpers.py              # Utility helper functions
-  - models/user.py                # User model definitions
+  - main.py # Entry point of the application
+  - app.py # Application configuration
+  - config/settings.py # Configuration settings
+  - utils/helpers.py # Utility helper functions
+  - models/user.py # User model definitions
   - controllers/auth_controller.py# Authentication controller
-  - services/email_service.py     # Email service integration
-  - routes/api_routes.py          # API route definitions
-  - database/db_connection.py     # Database connection setup
-  - tests/test_main.py            # Main application tests
+  - services/email_service.py # Email service integration
+  - routes/api_routes.py # API route definitions
+  - database/db_connection.py # Database connection setup
+  - tests/test_main.py # Main application tests
 ```
 
-*Update the list based on your project's structure.*
+_Update the list based on your project's structure._
 
 #### 3. **Additional Configuration (Optional)**
 
@@ -200,11 +196,11 @@ custom_sections:
     section_title: "License"
 ```
 
-*Customize these sections as per your project requirements.*
+_Customize these sections as per your project requirements._
 
 ## Additional Notes
 
-- **Static Files**: Ensure that `overview.txt`, `important_info.txt`, and `to-do_list.txt` are present in the same directory as `generate_repo-context.py`.
+- **Static Files**: Ensure that `overview.txt`, `important_info.txt`, and `to-do_list.txt` are present in the same directory as `generate_repo_context.py`.
 - **Syntax Highlighting**: The script supports syntax highlighting for common file types like `.py`, `.js`, `.json`, etc. To add more file types, update the `LANGUAGE_MAP` in the script.
 - **Source Directory**: By default, the script assumes your main source code is in the `src/` directory. If your project uses a different structure, update the `start_path` in the script or make it configurable.
 

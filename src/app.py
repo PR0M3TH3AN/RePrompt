@@ -1,138 +1,170 @@
-```python
 import streamlit as st
 from pathlib import Path
-import subprocess
-import yaml
-from generate_repo_context import main as generate_context_main
-import shutil
 import os
-import tempfile
+import yaml
+from tkinter import Tk
+from tkinter.filedialog import askdirectory
+import subprocess
+import sys  # Add this import
 
 # Configuration
 CONFIG_FILE = "config.yaml"
 OUTPUT_FILE = "repo-context.txt"
-STATIC_FILES_DIR = Path(__file__).parent / "static_files"
 GLOBAL_FILES_DIR = Path(__file__).parent / "global_files"
-REPOS_DIR = Path(__file__).parent / "repositories"
+SAVED_CONFIG_FILE = Path(__file__).parent / "saved_config.yaml"
+SCRIPT_DIR = Path(__file__).parent
+
+# Default exclusions
+DEFAULT_EXCLUDED_DIRS = ["node_modules", "venv", "__pycache__", ".git", "dist", "build", "logs", ".idea", ".vscode"]
+DEFAULT_EXCLUDED_FILES = ["repo-context.txt"]
 
 # Ensure necessary directories exist
-REPOS_DIR.mkdir(exist_ok=True)
 GLOBAL_FILES_DIR.mkdir(exist_ok=True)
-STATIC_FILES_DIR.mkdir(exist_ok=True)
 
-# Load configuration
+# Load saved configuration
+def load_saved_config():
+    if SAVED_CONFIG_FILE.exists():
+        try:
+            with open(SAVED_CONFIG_FILE, "r") as f:
+                return yaml.safe_load(f)
+        except yaml.YAMLError:
+            return {}
+    return {}
+
+# Save configuration
+def save_config(config):
+    with open(SAVED_CONFIG_FILE, "w") as f:
+        yaml.dump(config, f)
+
+# Load application configuration
 def load_config():
-    config_path = Path(__file__).parent / CONFIG_FILE
+    config_path = SCRIPT_DIR / CONFIG_FILE
     if not config_path.exists():
         st.error(f"Configuration file {CONFIG_FILE} not found.")
         st.stop()
     try:
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        return config
+        with open(config_path, "r") as f:
+            return yaml.safe_load(f)
     except yaml.YAMLError as e:
         st.error(f"Error parsing configuration file: {e}")
         st.stop()
 
-config = load_config()
-exclude_dirs = config.get("exclude_dirs", [])
-important_files = config.get("important_files", [])
-custom_sections = config.get("custom_sections", [])
+app_config = load_config()
+saved_config = load_saved_config()
+
+exclude_dirs = app_config.get("exclude_dirs", DEFAULT_EXCLUDED_DIRS)
 
 # Streamlit App
 st.title("Repository Context Generator")
 
-st.sidebar.header("Clone Repository")
-repo_url = st.sidebar.text_input("Repository URL", "")
-repo_name = st.sidebar.text_input("Repository Name", "")
-if st.sidebar.button("Clone Repository"):
-    if repo_url and repo_name:
-        repo_path = REPOS_DIR / repo_name
-        if repo_path.exists():
-            st.sidebar.warning("Repository already cloned.")
-        else:
-            try:
-                subprocess.run(['git', 'clone', repo_url, str(repo_path)], check=True)
-                st.sidebar.success("Repository cloned successfully.")
-            except subprocess.CalledProcessError as e:
-                st.sidebar.error(f"Error cloning repository: {e}")
+# Folder Selection
+st.sidebar.header("Select a Folder")
+if st.sidebar.button("Choose Folder"):
+    root = Tk()
+    root.withdraw()  # Hide the main window
+    root.attributes("-topmost", True)  # Bring the dialog to the front
+    folder_path = askdirectory()  # Open folder selection dialog
+    root.destroy()
+
+    if folder_path:
+        st.session_state["selected_repo_path"] = folder_path
+        st.sidebar.success(f"Selected folder: {folder_path}")
     else:
-        st.sidebar.error("Please provide both Repository URL and Name.")
+        st.sidebar.error("No folder selected.")
 
-st.header("Select Repository")
-available_repos = [d.name for d in REPOS_DIR.iterdir() if d.is_dir()]
-selected_repo = st.selectbox("Choose a repository", available_repos)
+# Load previously selected folder
+selected_repo_path = st.session_state.get("selected_repo_path", None)
 
-if selected_repo:
-    repo_path = REPOS_DIR / selected_repo
+if selected_repo_path:
+    st.header(f"Selected Repository: {selected_repo_path}")
+    repo_path = Path(selected_repo_path)
 
     st.subheader("File Filtering")
-    # Retrieve all files in the repository
-    file_list = []
+    # Retrieve directories and files in the repository
+    all_directories = []
+    all_files = []
     for root, dirs, files in os.walk(repo_path):
         rel_root = Path(root).relative_to(repo_path)
+        dirs[:] = [d for d in dirs if d not in DEFAULT_EXCLUDED_DIRS]
         for d in dirs:
-            file_list.append(str(rel_root / d) + "/")
+            all_directories.append(str(rel_root / d) + "/")
         for f in files:
-            file_list.append(str(rel_root / f))
+            all_files.append(str(rel_root / f))
 
-    # File inclusion and exclusion
-    include_prompt = st.multiselect("Include in Prompt", options=file_list)
-    exclude_prompt = st.multiselect("Exclude from Prompt", options=file_list)
-    include_tree = st.multiselect("Include in Directory Tree", options=file_list)
-    exclude_tree = st.multiselect("Exclude from Directory Tree", options=file_list)
+    # Directory selection for Directory Tree
+    selected_directories = st.multiselect(
+        "Include in Directory Tree", options=all_directories, default=saved_config.get("selected_directories", [])
+    )
 
-    st.subheader("Global Files")
-    st.write("Files in the `global_files/` directory are included in every context.")
+    # Automatically include files within selected directories unless explicitly excluded
+    included_files = [
+        f for f in all_files if any(str(Path(f).parent) in d for d in selected_directories)
+    ]
 
-    # Display current global files
-    global_files = [f.name for f in GLOBAL_FILES_DIR.iterdir() if f.is_file()]
-    st.write("### Current Global Files:")
-    for gf in global_files:
-        st.write(f"- {gf}")
+    # File exclusions
+    excluded_files = st.multiselect(
+        "Exclude Specific Files",
+        options=[f for f in included_files if f not in DEFAULT_EXCLUDED_FILES],
+        default=[
+            f for f in saved_config.get("excluded_files", [])
+            if f in included_files and f not in DEFAULT_EXCLUDED_FILES
+        ],
+    )
 
-    # Upload new global files
-    uploaded_file = st.file_uploader("Add Global File", type=["txt", "xml", "md"])
-    if uploaded_file:
-        save_path = GLOBAL_FILES_DIR / uploaded_file.name
-        with open(save_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        st.success(f"Global file `{uploaded_file.name}` added.")
+    st.write("### Final Included Files")
+    st.write([f for f in included_files if f not in excluded_files])
 
-    # Generate Context File
+    st.subheader("Generate Context File")
     if st.button("Generate Context File"):
         try:
-            # Create a temporary directory to store the output
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                temp_output = Path(tmpdirname) / OUTPUT_FILE
+            # Update config.yaml based on user selections
+            updated_config = {
+                "source_directory": str(repo_path),
+                "exclude_dirs": DEFAULT_EXCLUDED_DIRS,
+                "important_files": [f for f in included_files if f not in excluded_files],
+                "custom_sections": app_config.get("custom_sections", []),
+            }
 
-                # Prepare parameters
-                generate_context_main(
-                    config_path=Path(__file__).parent / CONFIG_FILE,
-                    source_dir=config.get("source_directory", "src"),
-                    start_path=repo_path,
-                    exclude_dirs=exclude_dirs,
-                    important_files=important_files,
-                    custom_sections=custom_sections,
-                    include_prompt=include_prompt,
-                    exclude_prompt=exclude_prompt,
-                    include_tree=include_tree,
-                    exclude_tree=exclude_tree,
-                    global_files_dir=GLOBAL_FILES_DIR,
-                    output_file=temp_output
-                )
+            # Write updated config.yaml
+            with open(SCRIPT_DIR / CONFIG_FILE, "w") as f:
+                yaml.dump(updated_config, f)
 
-                # Read the generated context file
-                with open(temp_output, 'r', encoding='utf-8') as f:
+            # Run the script as a subprocess
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT_DIR / "generate_repo_context.py")],
+                cwd=SCRIPT_DIR,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            st.success("Context file generated successfully.")
+            st.write(f"Script output:\n{result.stdout}")
+
+            # Check if the file was created
+            generated_file = SCRIPT_DIR / OUTPUT_FILE
+            if generated_file.exists():
+                with open(generated_file, "r", encoding="utf-8") as f:
                     context_content = f.read()
 
-                # Provide download link
                 st.download_button(
                     label="Download repo-context.txt",
                     data=context_content,
-                    file_name='repo-context.txt',
-                    mime='text/plain'
+                    file_name="repo-context.txt",
+                    mime="text/plain",
                 )
-                st.success("Context file generated successfully.")
-        except Exception as e:
+            else:
+                st.error("Context file not found after script execution.")
+        except subprocess.CalledProcessError as e:
             st.error(f"Error generating context file: {e}")
+            st.error(f"Script output:\n{e.stdout}\n\n{e.stderr}")
+
+    # Save configuration for future use
+    if st.button("Save Configuration"):
+        save_config({
+            "selected_directories": selected_directories,
+            "excluded_files": excluded_files,
+        })
+        st.success("Configuration saved successfully.")
+else:
+    st.write("Please select a folder to begin.")
