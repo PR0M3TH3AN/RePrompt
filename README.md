@@ -75,10 +75,7 @@ and helps users to [describe main benefits].
 python -m venv venv
 
 # Activate using Command Prompt
-venv\Scripts\activate.bat
-
-# OR activate using PowerShell
-.\venv\Scripts\Activate.ps1
+venv\Scripts\activate
 ```
 
 #### macOS/Linux:
@@ -92,6 +89,10 @@ source venv/bin/activate
 ```
 
 ### 4. Install Dependencies
+
+```bash
+cd src
+```
 
 ```bash
 pip install -r requirements.txt
@@ -111,7 +112,6 @@ pyperclip
 ## Running the Application
 
 ```bash
-cd src
 streamlit run app.py
 ```
 
@@ -121,7 +121,7 @@ The application will open in your default web browser at `http://localhost:8501`
 
 ### 1. Initial Setup
 
-- Create a basic `config.yaml` file in the src directory:
+- There is a basic `config.yaml` file created for you in the src directory:
 
 ```yaml
 exclude_dirs:

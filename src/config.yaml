@@ -1,29 +1,12 @@
 custom_sections:
-- file: changelog.txt
-  section_title: Changelog
-- file: LICENSE.txt
-  section_title: License
+  - file: changelog.txt
+    section_title: Changelog
+  - file: LICENSE.txt
+    section_title: License
 exclude_dirs:
-- node_modules
-- venv
-- __pycache__
-- .git
-- dist
-- build
-- logs
-- .idea
-- .vscode
+  -
+
 important_files:
-- src\app.py
-- src\config.yaml
-- src\generate_repo_context.py
-- src\index.html
-- src\README.md
-- src\repo-context.txt
-- src\requirements.txt
-- src\saved_config.yaml
-- src\global_files\format_response.md
-- src\static_files\important_info.txt
-- src\static_files\overview.txt
-- src\static_files\to-do_list.txt
-source_directory: C:\Users\user\Documents\GitHub\Context-Tool
+  -
+
+source_directory:
