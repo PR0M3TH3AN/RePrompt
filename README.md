@@ -1,5 +1,3 @@
-Here's the improved README.md:
-
 # RePrompt: A Context Generator
 
 This app is to be used in conjunction with [mckaywrigley's xml parser](https://github.com/mckaywrigley/o1-xml-parser/tree/main).
