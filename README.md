@@ -22,7 +22,7 @@ The **RePrompt** is a tool designed to create a comprehensive context file (`rep
 ## Directory Structure
 
 ```
-repository-context-generator/
+RePrompt/
 ├── src/
 │   ├── app.py                   # Main Streamlit application
 │   ├── generate_repo_context.py # Context generation script
@@ -40,8 +40,8 @@ repository-context-generator/
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd repository-context-generator
+git clone https://github.com/PR0M3TH3AN/RePrompt
+cd RePrompt
 ```
 
 ### 2. Create Required Directories and Files
