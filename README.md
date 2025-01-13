@@ -55,8 +55,6 @@ src/static_files/
 └── to-do_list.txt    # Current project tasks and goals
 ```
 
-````
-
 These files are read when generating the context file. If they don't exist, the tool will still work but those sections will be empty in the generated context. Update these files with relevant information about your project to improve AI assistance.
 
 Example `overview.txt`:
@@ -237,4 +235,7 @@ custom_sections:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-````
+
+```
+
+```
