@@ -44,13 +44,30 @@ git clone https://github.com/PR0M3TH3AN/RePrompt
 cd RePrompt
 ```
 
-### 2. Create Required Directories and Files
+Here's the updated section:
+
+````markdown
+### 2. Context Files (Optional)
+
+The tool looks for these files to provide additional context to AI assistants. While not required for basic functionality, they enhance the AI's understanding of your project:
 
 ```bash
-mkdir -p src/static_files src/global_files
-touch src/static_files/overview.txt
-touch src/static_files/important_info.txt
-touch src/static_files/to-do_list.txt
+src/static_files/
+├── overview.txt       # General project description and purpose
+├── important_info.txt # Critical information AI should know
+└── to-do_list.txt    # Current project tasks and goals
+```
+````
+
+These files are read when generating the context file. If they don't exist, the tool will still work but those sections will be empty in the generated context. Update these files with relevant information about your project to improve AI assistance.
+
+Example `overview.txt`:
+
+```txt
+# Project Overview
+
+This project is designed to [describe main purpose]. It [explain key functionality]
+and helps users to [describe main benefits].
 ```
 
 ### 3. Set Up Virtual Environment
