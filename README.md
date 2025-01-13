@@ -1,5 +1,7 @@
 # RePrompt: A Context Generator
 
+This app is to be used in conjunction with [mckaywrigley's xml parser](https://github.com/mckaywrigley/o1-xml-parser/tree/main).
+
 The **RePrompt** is a tool designed to create a comprehensive context file (`repo-context.txt`) for AI coding assistants like ChatGPT. The context file aggregates essential information from your repository, including an overview, directory tree, excluded and included files, highlighted file contents, and additional static sections like a to-do list.
 
 ## Features

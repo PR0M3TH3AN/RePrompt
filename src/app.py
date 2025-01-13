@@ -5,7 +5,12 @@ import yaml
 from tkinter import Tk
 from tkinter.filedialog import askdirectory
 import subprocess
-import sys  # Add this import
+import sys 
+import pyperclip
+
+# Initialize session state variables
+if 'copied' not in st.session_state:
+    st.session_state.copied = False
 
 # Configuration
 CONFIG_FILE = "config.yaml"
@@ -54,21 +59,38 @@ saved_config = load_saved_config()
 
 exclude_dirs = app_config.get("exclude_dirs", DEFAULT_EXCLUDED_DIRS)
 
+# Initialize session state for selected_repo_path if not present
+if "selected_repo_path" not in st.session_state:
+    st.session_state["selected_repo_path"] = None
+
 # Streamlit App
 st.title("Repository Context Generator")
 
 # Folder Selection
 st.sidebar.header("Select a Folder")
-if st.sidebar.button("Choose Folder"):
-    root = Tk()
-    root.withdraw()  # Hide the main window
-    root.attributes("-topmost", True)  # Bring the dialog to the front
-    folder_path = askdirectory()  # Open folder selection dialog
-    root.destroy()
 
-    if folder_path:
-        st.session_state["selected_repo_path"] = folder_path
-        st.sidebar.success(f"Selected folder: {folder_path}")
+def select_folder():
+    try:
+        root = Tk()
+        root.withdraw()  # Hide the main window
+        root.wm_attributes('-topmost', True)  # Keep on top
+        folder_path = askdirectory(parent=root)  # Specify parent window
+        if folder_path:
+            st.session_state["selected_repo_path"] = folder_path
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Error selecting folder: {str(e)}")
+        return False
+    finally:
+        try:
+            root.destroy()  # Ensure window is destroyed
+        except:
+            pass  # Ignore any errors during cleanup
+
+if st.sidebar.button("Choose Folder"):
+    if select_folder():
+        st.sidebar.success(f"Selected folder: {st.session_state['selected_repo_path']}")
     else:
         st.sidebar.error("No folder selected.")
 
@@ -83,8 +105,9 @@ if selected_repo_path:
     # Retrieve directories and files in the repository
     all_directories = []
     all_files = []
-    for root, dirs, files in os.walk(repo_path):
-        rel_root = Path(root).relative_to(repo_path)
+    for root_dir, dirs, files in os.walk(repo_path):
+        rel_root = Path(root_dir).relative_to(repo_path)
+        # Exclude default directories
         dirs[:] = [d for d in dirs if d not in DEFAULT_EXCLUDED_DIRS]
         for d in dirs:
             all_directories.append(str(rel_root / d) + "/")
@@ -93,7 +116,9 @@ if selected_repo_path:
 
     # Directory selection for Directory Tree
     selected_directories = st.multiselect(
-        "Include in Directory Tree", options=all_directories, default=saved_config.get("selected_directories", [])
+        "Include in Directory Tree",
+        options=all_directories,
+        default=saved_config.get("selected_directories", [])
     )
 
     # Automatically include files within selected directories unless explicitly excluded
@@ -112,7 +137,8 @@ if selected_repo_path:
     )
 
     st.write("### Final Included Files")
-    st.write([f for f in included_files if f not in excluded_files])
+    final_included_files = [f for f in included_files if f not in excluded_files]
+    st.write(final_included_files)
 
     st.subheader("Generate Context File")
     if st.button("Generate Context File"):
@@ -121,7 +147,7 @@ if selected_repo_path:
             updated_config = {
                 "source_directory": str(repo_path),
                 "exclude_dirs": DEFAULT_EXCLUDED_DIRS,
-                "important_files": [f for f in included_files if f not in excluded_files],
+                "important_files": final_included_files,
                 "custom_sections": app_config.get("custom_sections", []),
             }
 
@@ -147,17 +173,36 @@ if selected_repo_path:
                 with open(generated_file, "r", encoding="utf-8") as f:
                     context_content = f.read()
 
-                st.download_button(
-                    label="Download repo-context.txt",
-                    data=context_content,
-                    file_name="repo-context.txt",
-                    mime="text/plain",
-                )
+                # Replace the current copy button section with this:
+                if context_content.strip():  # Ensure content is not empty
+                    # Add Download Button with unique key
+                    st.download_button(
+                        label="Download repo-context.txt",
+                        data=context_content,
+                        file_name="repo-context.txt",
+                        mime="text/plain",
+                        key="download_button_1"
+                    )
+
+                    st.info("To copy: Click in the text area, press Ctrl+A (Cmd+A on Mac) to select all, then Ctrl+C (Cmd+C on Mac) to copy.")
+
+                    # Create a text area with the content
+                    text_area = st.text_area(
+                        "Generated Context File",
+                        value=context_content,
+                        height=400,
+                        key="context_content"
+                    )
+                else:
+                    st.error("Generated content is empty. Please review your repository and configurations.")
             else:
                 st.error("Context file not found after script execution.")
         except subprocess.CalledProcessError as e:
-            st.error(f"Error generating context file: {e}")
-            st.error(f"Script output:\n{e.stdout}\n\n{e.stderr}")
+            st.error("Error generating context file:")
+            if e.stdout:
+                st.text(f"Standard Output:\n{e.stdout}")
+            if e.stderr:
+                st.text(f"Standard Error:\n{e.stderr}")
 
     # Save configuration for future use
     if st.button("Save Configuration"):

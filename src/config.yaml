@@ -19,6 +19,7 @@ important_files:
 - src\generate_repo_context.py
 - src\index.html
 - src\README.md
+- src\repo-context.txt
 - src\requirements.txt
 - src\saved_config.yaml
 - src\global_files\format_response.md
