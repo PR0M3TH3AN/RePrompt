@@ -110,9 +110,6 @@ Required packages:
 ```txt
 streamlit
 PyYAML
-Flask
-Flask-Cors
-GitPython
 pyperclip
 ```
 
