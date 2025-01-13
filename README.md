@@ -222,9 +222,3 @@ custom_sections:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## Support
-
-For issues and feature requests, please create an issue in the GitHub repository.
