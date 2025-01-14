@@ -27,12 +27,8 @@ RePrompt/
 │   ├── app.py                   # Main Streamlit application
 │   ├── generate_repo_context.py # Context generation script
 │   ├── config.yaml             # Configuration file
-│   ├── requirements.txt        # Python dependencies
-│   ├── global_files/           # Global files for all contexts
-│   └── static_files/           # Static content files
-│       ├── overview.txt        # Project overview
-│       ├── important_info.txt  # Important information
-│       └── to-do_list.txt     # Project to-do list
+│   ├── index.html            # The webpage file
+│   └── requirements.txt        # Python dependencies
 ```
 
 ## Installation
@@ -44,29 +40,7 @@ git clone https://github.com/PR0M3TH3AN/RePrompt
 cd RePrompt
 ```
 
-### 2. Context Files (Optional)
-
-The tool looks for these files to provide additional context to AI assistants. While not required for basic functionality, they enhance the AI's understanding of your project:
-
-```bash
-src/static_files/
-├── overview.txt       # General project description and purpose
-├── important_info.txt # Critical information AI should know
-└── to-do_list.txt    # Current project tasks and goals
-```
-
-These files are read when generating the context file. If they don't exist, the tool will still work but those sections will be empty in the generated context. Update these files with relevant information about your project to improve AI assistance.
-
-Example `overview.txt`:
-
-```txt
-# Project Overview
-
-This project is designed to [describe main purpose]. It [explain key functionality]
-and helps users to [describe main benefits].
-```
-
-### 3. Set Up Virtual Environment
+### 2. Set Up Virtual Environment
 
 #### Windows:
 
@@ -88,13 +62,13 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 4. Install Dependencies
+### 3. Install Dependencies
 
 ```bash
 cd src
 ```
 
-### 3. Install Dependencies
+### 4. Install Dependencies
 
 Update pip first:
 
@@ -182,18 +156,6 @@ DEFAULT_EXCLUDED_DIRS = [
 DEFAULT_EXCLUDED_FILES = ["repo-context.txt"]
 ```
 
-### Add Custom Sections
-
-Modify `config.yaml` to add custom sections:
-
-```yaml
-custom_sections:
-  - file: changelog.txt
-    section_title: "Changelog"
-  - file: LICENSE.txt
-    section_title: "License"
-```
-
 ## Troubleshooting
 
 ### Common Issues
@@ -238,7 +200,3 @@ custom_sections:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-```
-
-```

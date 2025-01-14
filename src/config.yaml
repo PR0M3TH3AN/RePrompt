@@ -1,12 +1,1 @@
-custom_sections:
-  - file: changelog.txt
-    section_title: Changelog
-  - file: LICENSE.txt
-    section_title: License
-exclude_dirs:
-  -
-
-important_files:
-  -
-
-source_directory:
+{}
