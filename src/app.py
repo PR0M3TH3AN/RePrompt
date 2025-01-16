@@ -17,7 +17,7 @@ CONFIG_FILE = "config.yaml"
 SCRIPT_DIR = Path(__file__).parent
 
 # Default exclusions
-DEFAULT_EXCLUDED_DIRS = ["node_modules", "venv", "__pycache__", ".git", "dist", "build", "logs", ".idea", ".vscode"]
+DEFAULT_EXCLUDED_DIRS = ["node_modules", "venv", "__pycache__", ".git", "logs", ".idea", ".vscode"]
 DEFAULT_EXCLUDED_FILES = [
     "repo-context.txt",
     "package-lock.json",
@@ -25,7 +25,6 @@ DEFAULT_EXCLUDED_FILES = [
     ".gitattributes",
     ".gitignore",
     ".dockerignore",
-    ".env",
     "*.pem",
     "*.crt",
     "*.key",
@@ -34,11 +33,7 @@ DEFAULT_EXCLUDED_FILES = [
     ".browserslistrc",
     ".editorconfig",
     "client.crt",
-    "client-key.pem",
-    "docker-compose.yml",
-    ".env.local",
-    ".env.development",
-    ".env.production"
+    "client-key.pem"
 ]
 
 # Load saved configuration from repository directory
