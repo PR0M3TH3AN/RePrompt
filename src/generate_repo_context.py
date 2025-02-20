@@ -225,43 +225,44 @@ def write_custom_sections(custom_sections: List[Dict], script_dir: Path, output_
         file_path = script_dir / "static_files" / file_name
         write_static_file(file_path, output_file, section_title)
 
-def append_xml_section(output_file: Path):
-    """
-    Appends the XML section to the output file within markdown code blocks.
-
-    Args:
-        output_file (Path): Path to the output file where the XML section will be appended.
-    """
-    xml_content = """
-## XML Section
-
-```xml
-<code_changes>
-  <changed_files>
-    <file>
-      <file_operation>CREATE</file_operation>
-      <file_path>app/new_file.py</file_path>
-      <file_code><![CDATA[
-# New Python file
-def new_function():
-    pass
-]]></file_code>
-    </file>
-    <!-- Add more file changes here -->
-  </changed_files>
-</code_changes>
-```
-
-**Other rules:**
-- DO NOT remove `<ai_context>` sections. These are to provide you additional context about each file.
-- If you create a file, add an `<ai_context>` comment section at the top of the file.
-- If you update a file make sure its `<ai_context>` stays up-to-date.
-- DO NOT add comments related to your edits.
-- DO NOT remove my existing comments.
-"""
-    with output_file.open('a', encoding='utf-8') as f:
-        f.write(xml_content + "\n")
-    logging.info("XML section appended to the context file.")
+# The XML section has been removed.
+# def append_xml_section(output_file: Path):
+#     """
+#     Appends the XML section to the output file within markdown code blocks.
+#
+#     Args:
+#         output_file (Path): Path to the output file where the XML section will be appended.
+#     """
+#     xml_content = """
+# ## XML Section
+#
+# ```xml
+# <code_changes>
+#   <changed_files>
+#     <file>
+#       <file_operation>CREATE</file_operation>
+#       <file_path>app/new_file.py</file_path>
+#       <file_code><![CDATA[
+# # New Python file
+# def new_function():
+#     pass
+# ]]></file_code>
+#     </file>
+#     <!-- Add more file changes here -->
+#   </changed_files>
+# </code_changes>
+# ```
+#
+# **Other rules:**
+# - DO NOT remove `<ai_context>` sections. These are to provide you additional context about each file.
+# - If you create a file, add an `<ai_context>` comment section at the top of the file.
+# - If you update a file make sure its `<ai_context>` stays up-to-date.
+# - DO NOT add comments related to your edits.
+# - DO NOT remove my existing comments.
+# """
+#     with output_file.open('a', encoding='utf-8') as f:
+#         f.write(xml_content + "\n")
+#     logging.info("XML section appended to the context file.")
 
 def main():
     """Main function that orchestrates the generation of the repository context file."""
@@ -321,8 +322,8 @@ def main():
     todo_path = script_dir / "static_files" / "to-do_list.txt"
     write_static_file(todo_path, output_file, "To-Do List")
 
-    # Append XML section
-    append_xml_section(output_file)
+    # The XML section output has been removed.
+    # append_xml_section(output_file)
 
     logging.info(f"Context file created: {output_file}")
 
