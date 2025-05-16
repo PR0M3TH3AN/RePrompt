@@ -1,331 +1,264 @@
 #!/usr/bin/env python3
-
 """
 Script Name: generate_repo_context.py
-Description: Generates a context file (`repo-context.txt`) for AI coding assistants.
-             Includes an overview, important information, a directory tree with exclusions,
-             content of important files with syntax highlighting, and a to-do list.
+Description: Generates a context file (``repo-context.txt``) for AI coding assistants.
+             This revised version **only shows the directory structure for files that
+             are explicitly whitelisted** via the Streamlit UI (``important_files`` in
+             ``config.yaml``). All other paths are ignored, so the directory tree is
+             minimal and focused on the user-selected scope.
 
 Usage:
-1. Ensure you have Python 3.7 or higher installed.
+    Streamlit writes an updated ``config.yaml`` that includes:
+        source_directory: <absolute path to repo>
+        important_files:  # list[str] – paths *relative* to the repo root
+        exclude_dirs:     # (optional) patterns to skip entirely
+    Then it invokes this script.
 
-2. (Optional) Set up a Python virtual environment:
-     python -m venv venv
-     source venv/bin/activate               # On Unix or MacOS
-     venv\Scripts\activate.bat              # On Windows (Command Prompt)
-     venv\Scripts\Activate.ps1              # On Windows (PowerShell)
-
-3. Install the required Python packages:
-     pip install -r requirements.txt
-
-4. Configure `config.yaml` as needed.
-
-5. Place `overview.txt`, `important_info.txt`, and `to-do_list.txt` in the `static_files` directory.
-
-6. Run the script:
-     ./generate_repo_context.py             # Unix-like systems
-     python generate_repo_context.py        # Windows
-     
-The script will create `repo-context.txt` with the specified structure.
+    See README or Streamlit UI for full workflow.
 """
 
+from __future__ import annotations
+
+import logging
 import os
 import sys
-import yaml
-from pathlib import Path
-import logging
-from typing import List, Dict
+from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Set
 
-# Configuration Constants
+import yaml
+
+# ─── Configuration Constants ────────────────────────────────────────────────────
 CONFIG_FILE = "config.yaml"
 OUTPUT_FILE = "repo-context.txt"
 
-# Static Text Files and Their Corresponding Section Titles
+# Static text sections that can be dropped in verbatim
 STATIC_FILES = [
     {"file": "overview.txt", "section_title": "Overview"},
     {"file": "important_info.txt", "section_title": "Important Information"},
-    {"file": "to-do_list.txt", "section_title": "To-Do List"}
+    {"file": "to-do_list.txt", "section_title": "To-Do List"},
 ]
 
-# Mapping of File Extensions to Programming Languages for Syntax Highlighting
+# File-extension → syntax-highlight language map for fenced code blocks
 LANGUAGE_MAP = {
-    '.py': 'python',
-    '.json': 'json',
-    '.env': 'bash',
-    '.js': 'javascript',
-    '.html': 'html',
-    '.css': 'css',
-    '.csv': 'csv',
-    '.md': 'markdown',
-    '.txt': '',  # Plain text
-    '.xml': 'xml',
-    # Add more mappings as needed
+    ".py": "python",
+    ".json": "json",
+    ".env": "bash",
+    ".js": "javascript",
+    ".html": "html",
+    ".css": "css",
+    ".csv": "csv",
+    ".md": "markdown",
+    ".txt": "",  # plain text
+    ".xml": "xml",
 }
 
-# Extensions of Binary Files to Skip
-BINARY_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.db', '.exe', '.bin']
+# Binary extensions (skipped – we don’t dump binary blobs into markdown)
+BINARY_EXTENSIONS = [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".db",
+    ".exe",
+    ".bin",
+]
 
-def setup_logging():
-    """Configures the logging format and level."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='[%(levelname)s] %(message)s'
-    )
+# ─── Helpers ────────────────────────────────────────────────────────────────────
+
+def setup_logging() -> None:
+    """Configure basic colourless log output."""
+    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+
 
 def load_config(config_path: Path) -> Dict:
-    """
-    Loads configuration from a YAML file.
-
-    Args:
-        config_path (Path): Path to the YAML configuration file.
-
-    Returns:
-        dict: Configuration dictionary containing 'exclude_dirs', 'important_files', and 'custom_sections'.
-    """
+    """Load YAML config or abort if it’s missing/invalid."""
     if not config_path.exists():
         logging.error(f"Configuration file {config_path} not found.")
         sys.exit(1)
     try:
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        logging.info(f"Loaded configuration from {config_path}.")
-        return config
-    except yaml.YAMLError as e:
-        logging.error(f"Error parsing configuration file: {e}")
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        logging.info("Loaded configuration.")
+        return cfg
+    except yaml.YAMLError as exc:
+        logging.error(f"Error parsing configuration file: {exc}")
         sys.exit(1)
 
-def generate_directory_tree(start_path: Path, exclude_dirs: List[str]) -> List[str]:
-    """
-    Generates a directory tree as a list of strings, excluding specified directories.
+# ─── Directory-tree generation (whitelist-aware) ───────────────────────────────
+
+def build_whitelist_tree(
+    repo_root: Path, *, included_files: List[str], exclude_dirs: List[str] | None = None
+) -> List[str]:
+    """Return a list of tree-view lines that *only* contain
+    directories + files present in ``included_files``.
 
     Args:
-        start_path (Path): The root directory to start generating the tree from.
-        exclude_dirs (list): List of directory patterns to exclude.
-
-    Returns:
-        list: List of strings representing the directory tree.
+        repo_root: absolute path to repo root (``source_directory``)
+        included_files: list of *relative* paths (as written by Streamlit)
+        exclude_dirs: optional patterns to ignore entirely (even if they’d be
+                       parents of an included file)
     """
-    tree_lines = []
-    root = start_path.resolve()
-    for dirpath, dirnames, filenames in os.walk(start_path):
-        current_path = Path(dirpath)
-        rel_path = current_path.relative_to(root)
 
-        # Skip excluded directories
-        if any(current_path.match(excl) or excl in rel_path.parts for excl in exclude_dirs):
-            dirnames[:] = []  # Don't traverse further into subdirectories
+    exclude_dirs = exclude_dirs or []
+    repo_root = repo_root.resolve()
+
+    # Normalise the whitelist: Posix style, unique, ensure they exist
+    norm_files: Set[Path] = set()
+    for rel in included_files:
+        p = (repo_root / rel).resolve()
+        if not p.exists():
+            logging.warning(f"Whitelisted file missing on disk – skipped: {rel}")
             continue
+        norm_files.add(p)
 
-        # Determine the indentation level
-        depth = len(rel_path.parts)
-        indent = "    " * depth
-        connector = "├── " if depth > 0 else "."
-        if depth > 0:
-            tree_lines.append(f"{indent}{connector}{current_path.name}/")
-        else:
-            tree_lines.append(f"{connector}")
+    if not norm_files:
+        logging.warning("No valid whitelisted files – directory tree will be empty.")
+        return []
 
-        # Add files in the current directory
-        for filename in sorted(filenames):
-            file_rel_path = rel_path / filename
-            if any(file_rel_path.match(excl) or excl in file_rel_path.parts for excl in exclude_dirs):
-                continue
-            file_indent = "    " * (depth + 1)
-            tree_lines.append(f"{file_indent}├── {filename}")
+    # Collect every ancestor directory for each whitelisted file
+    keep_dirs: Set[Path] = set([repo_root])
+    for file_path in norm_files:
+        for parent in [*file_path.parents]:  # includes repo_root eventually
+            if any(parent.match(excl) or excl in parent.name for excl in exclude_dirs):
+                break  # stop climbing when encountering an excluded dir
+            keep_dirs.add(parent)
 
-    logging.info("Directory tree generated.")
+    # Build children mapping for deterministic ordering
+    children: Dict[Path, List[Path]] = defaultdict(list)
+    for d in keep_dirs:
+        children[d.parent].append(d)
+    for fp in norm_files:
+        children[fp.parent].append(fp)
+
+    for kid_list in children.values():
+        kid_list.sort(key=lambda p: (not p.is_dir(), p.name.lower()))  # dirs first
+
+    # Depth-first traversal to emit tree lines
+    tree_lines: List[str] = ["."]
+
+    def recurse(dir_path: Path, depth: int) -> None:
+        for entry in children.get(dir_path, []):
+            if entry == repo_root:
+                continue  # skip root as it is already represented by '.'
+            indent = "    " * depth
+            connector = "├── "
+            if entry.is_dir():
+                tree_lines.append(f"{indent}{connector}{entry.name}/")
+                recurse(entry, depth + 1)
+            else:
+                tree_lines.append(f"{indent}{connector}{entry.name}")
+
+    recurse(repo_root, 1)
+    logging.info("Whitelist-filtered directory tree generated.")
     return tree_lines
 
-def write_directory_tree(tree_lines: List[str], output_file: Path):
-    """
-    Writes the directory tree to the output file within markdown code blocks.
+# ─── Markdown writers ──────────────────────────────────────────────────────────
 
-    Args:
-        tree_lines (list): List of strings representing the directory tree.
-        output_file (Path): Path to the output file where the tree will be written.
-    """
-    with output_file.open('a', encoding='utf-8') as f:
-        f.write("## Directory Tree with Exclusions\n\n")
-        f.write("```\n")
-        for line in tree_lines:
-            f.write(line + "\n")
-        f.write("```\n\n")
-    logging.info("Directory tree written to the context file.")
+def write_directory_tree(tree_lines: List[str], out_path: Path) -> None:
+    with out_path.open("a", encoding="utf-8") as fh:
+        fh.write("## Directory Tree (Whitelist Only)\n\n")
+        fh.write("```\n")
+        fh.writelines(line + "\n" for line in tree_lines)
+        fh.write("```\n\n")
 
-def write_file_content(file_path: Path, output_file: Path):
-    """
-    Writes the content of a file to the output file within markdown code blocks with syntax highlighting.
 
-    Args:
-        file_path (Path): Path to the file whose content is to be written.
-        output_file (Path): Path to the output file where the content will be written.
-    """
+def write_file_content(file_path: Path, out_path: Path) -> None:
     ext = file_path.suffix
-    language = LANGUAGE_MAP.get(ext, '')
+    lang = LANGUAGE_MAP.get(ext, "")
+
     try:
-        relative_display_path = file_path.relative_to(file_path.parents[1])
+        relative_display = file_path.relative_to(file_path.parents[1])
     except ValueError:
-        # If relative_to fails, fallback to absolute path
-        relative_display_path = file_path
-    with output_file.open('a', encoding='utf-8') as f:
-        f.write(f"## {relative_display_path}\n")
-        if language:
-            f.write(f"```{language}\n")
+        relative_display = file_path
+
+    with out_path.open("a", encoding="utf-8") as fh:
+        fh.write(f"## {relative_display}\n")
+        fh.write(f"```{lang}\n" if lang else "```\n")
+        if ext in BINARY_EXTENSIONS:
+            fh.write(f"*Binary file ({ext}) cannot be displayed.*\n")
         else:
-            f.write("```\n")
-        try:
-            if ext in BINARY_EXTENSIONS:
-                # Skip binary files
-                f.write(f"*Binary file ({ext}) cannot be displayed.*\n")
-            else:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as file_content:
-                    content = file_content.read()
-                    f.write(content)
-        except Exception as e:
-            f.write(f"*Error reading file: {e}*\n")
-        f.write("\n```\n\n")
-    logging.info(f"Included content from {file_path}.")
+            try:
+                fh.write(file_path.read_text(encoding="utf-8", errors="ignore"))
+            except Exception as exc:
+                fh.write(f"*Error reading file: {exc}*\n")
+        fh.write("\n```\n\n")
 
-def write_static_file(file_path: Path, output_file: Path, section_title: str):
-    """
-    Writes the content of a static text file to the output file with a section header.
 
-    Args:
-        file_path (Path): Path to the static text file.
-        output_file (Path): Path to the output file where the content will be written.
-        section_title (str): Title of the section to be added before the content.
-    """
-    if not file_path.exists():
-        logging.warning(f"Static file {file_path} not found, skipping...")
+def write_static_file(src: Path, out_path: Path, section_title: str) -> None:
+    if not src.exists():
+        logging.warning(f"Static file missing – skipped: {src}")
         return
-    with output_file.open('a', encoding='utf-8') as f:
-        f.write(f"## {section_title}\n\n")
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as sf:
-                content = sf.read()
-                f.write(content + "\n\n")
-        except Exception as e:
-            f.write(f"*Error reading {file_path.name}: {e}*\n\n")
-            logging.error(f"Error reading {file_path}: {e}")
-    logging.info(f"Included static section: {section_title}.")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("a", encoding="utf-8") as fh:
+        fh.write(f"## {section_title}\n\n")
+        fh.write(src.read_text(encoding="utf-8", errors="ignore") + "\n\n")
 
-def write_custom_sections(custom_sections: List[Dict], script_dir: Path, output_file: Path):
-    """
-    Writes custom sections to the output file based on configuration.
 
-    Args:
-        custom_sections (list): List of dictionaries with 'file' and 'section_title'.
-        script_dir (Path): Directory where the script is located.
-        output_file (Path): Path to the output file.
-    """
-    for section in custom_sections:
-        file_name = section.get('file')
-        section_title = section.get('section_title', 'Custom Section')
-        file_path = script_dir / "static_files" / file_name
-        write_static_file(file_path, output_file, section_title)
+def write_custom_sections(sections: List[Dict], script_dir: Path, out_path: Path) -> None:
+    for entry in sections:
+        file_name = entry.get("file")
+        title = entry.get("section_title", "Custom Section")
+        write_static_file(script_dir / "static_files" / file_name, out_path, title)
 
-# The XML section has been removed.
-# def append_xml_section(output_file: Path):
-#     """
-#     Appends the XML section to the output file within markdown code blocks.
-#
-#     Args:
-#         output_file (Path): Path to the output file where the XML section will be appended.
-#     """
-#     xml_content = """
-# ## XML Section
-#
-# ```xml
-# <code_changes>
-#   <changed_files>
-#     <file>
-#       <file_operation>CREATE</file_operation>
-#       <file_path>app/new_file.py</file_path>
-#       <file_code><![CDATA[
-# # New Python file
-# def new_function():
-#     pass
-# ]]></file_code>
-#     </file>
-#     <!-- Add more file changes here -->
-#   </changed_files>
-# </code_changes>
-# ```
-#
-# **Other rules:**
-# - DO NOT remove `<ai_context>` sections. These are to provide you additional context about each file.
-# - If you create a file, add an `<ai_context>` comment section at the top of the file.
-# - If you update a file make sure its `<ai_context>` stays up-to-date.
-# - DO NOT add comments related to your edits.
-# - DO NOT remove my existing comments.
-# """
-#     with output_file.open('a', encoding='utf-8') as f:
-#         f.write(xml_content + "\n")
-#     logging.info("XML section appended to the context file.")
+# ─── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
-    """Main function that orchestrates the generation of the repository context file."""
+def main() -> None:
     setup_logging()
 
-    # Determine the script's directory
     script_dir = Path(__file__).parent.resolve()
+    cfg = load_config(script_dir / CONFIG_FILE)
 
-    # Load configuration
-    config_path = script_dir / CONFIG_FILE
-    config = load_config(config_path)
-    exclude_dirs = config.get("exclude_dirs", [])
-    important_files = config.get("important_files", [])
-    custom_sections = config.get("custom_sections", [])
-
-    # Define the starting path (default to 'src' directory or as specified)
-    source_dir = config.get("source_directory", "src")
-    start_path = script_dir.parent / source_dir
-    if not start_path.exists():
-        logging.error(f"Source directory {start_path} does not exist.")
+    # Resolve repo root (can be absolute or relative)
+    source_dir_cfg = cfg.get("source_directory", "src")
+    repo_root = Path(source_dir_cfg).expanduser()
+    if not repo_root.is_absolute():
+        repo_root = (script_dir.parent / repo_root).resolve()
+    if not repo_root.exists():
+        logging.error(f"Source directory does not exist: {repo_root}")
         sys.exit(1)
 
-    output_file = script_dir / OUTPUT_FILE
-    output_file.unlink(missing_ok=True)  # Remove if exists
+    important_files: List[str] = cfg.get("important_files", [])
+    exclude_dirs: List[str] = cfg.get("exclude_dirs", [])
+    custom_sections: List[Dict] = cfg.get("custom_sections", [])
 
-    # Write a header to the output file
-    with output_file.open('w', encoding='utf-8') as f:
-        f.write(f"# Repository Context\n\n")
-        f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d')}\n\n")
+    out_path = script_dir / OUTPUT_FILE
+    out_path.unlink(missing_ok=True)
 
-    # Write static sections
+    # ── Header ───────────────────────────────────────────────────────────────
+    with out_path.open("w", encoding="utf-8") as fh:
+        fh.write("# Repository Context\n\n")
+        fh.write(f"Generated on: {datetime.now():%Y-%m-%d}\n\n")
+
+    # ── Static boilerplate docs ──────────────────────────────────────────────
     for static in STATIC_FILES:
-        static_path = script_dir / "static_files" / static["file"]
-        write_static_file(static_path, output_file, static["section_title"])
+        write_static_file(script_dir / "static_files" / static["file"], out_path, static["section_title"])
 
-    # Generate and write the directory tree
-    tree_lines = generate_directory_tree(start_path, exclude_dirs)
-    write_directory_tree(tree_lines, output_file)
+    # ── Directory tree (whitelist only) ──────────────────────────────────────
+    tree_lines = build_whitelist_tree(repo_root, included_files=important_files, exclude_dirs=exclude_dirs)
+    write_directory_tree(tree_lines, out_path)
 
-    # Write important files
-    with output_file.open('a', encoding='utf-8') as f:
-        f.write("## Important Files\n\n")
-    for relative_file in important_files:
-        file_path = start_path / relative_file
-        if file_path.exists():
-            write_file_content(file_path, output_file)
+    # ── Important file dumps ─────────────────────────────────────────────────
+    with out_path.open("a", encoding="utf-8") as fh:
+        fh.write("## Important Files\n\n")
+    for rel_path in important_files:
+        abs_path = repo_root / rel_path
+        if abs_path.exists():
+            write_file_content(abs_path, out_path)
         else:
-            with output_file.open('a', encoding='utf-8') as f:
-                f.write(f"*File `{relative_file}` not found, skipping...*\n\n")
-            logging.warning(f"Important file {relative_file} not found, skipping...")
+            with out_path.open("a", encoding="utf-8") as fh:
+                fh.write(f"*File `{rel_path}` not found – skipped.*\n\n")
+            logging.warning(f"Important file not found on disk: {rel_path}")
 
-    # Write custom sections if any
+    # ── Custom sections ─────────────────────────────────────────────────────
     if custom_sections:
-        write_custom_sections(custom_sections, script_dir, output_file)
+        write_custom_sections(custom_sections, script_dir, out_path)
 
-    # Write to-do list
-    todo_path = script_dir / "static_files" / "to-do_list.txt"
-    write_static_file(todo_path, output_file, "To-Do List")
+    logging.info(f"Context file created → {out_path}")
 
-    # The XML section output has been removed.
-    # append_xml_section(output_file)
-
-    logging.info(f"Context file created: {output_file}")
 
 if __name__ == "__main__":
     main()
